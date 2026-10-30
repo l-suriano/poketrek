@@ -25,8 +25,39 @@ def ident(slug):
     return slug.upper().replace('-', '_')
 
 
+# La fuente 5x7 del firmware es CP437 y la UI centra con strlen()*6, asi que
+# los acentos van como un byte octal (igual que en i18n.cpp), nunca en UTF-8.
+# Las mayusculas acentuadas que CP437 no tiene pierden el acento.
+CP437 = {'á': '\\240', 'é': '\\202', 'í': '\\241', 'ó': '\\242', 'ú': '\\243',
+         'ñ': '\\244', 'Ñ': '\\245', 'ü': '\\201', 'Ü': '\\232', 'É': '\\220',
+         'Á': 'A', 'Í': 'I', 'Ó': 'O', 'Ú': 'U'}
+
+
 def cstr(s):
-    return '"' + s.replace('\\', '\\\\').replace('"', '\\"') + '"'
+    out = []
+    for ch in s.replace('\\', '\\\\').replace('"', '\\"'):
+        if ord(ch) < 128:
+            out.append(ch)
+        elif ch in CP437:
+            out.append(CP437[ch])
+        else:
+            raise SystemExit(f'caracter sin equivalente CP437 en {s!r}: {ch!r}')
+    # un octal seguido de digito se leeria como parte del escape: se corta la cadena
+    return '"' + '""'.join(_split_octal(''.join(out))) + '"'
+
+
+def _split_octal(s):
+    parts, i = [''], 0
+    while i < len(s):
+        if s[i] == '\\' and i + 3 < len(s) + 1 and s[i + 1:i + 4].isdigit():
+            parts[-1] += s[i:i + 4]
+            i += 4
+            if i < len(s) and s[i].isdigit():
+                parts.append('')
+            continue
+        parts[-1] += s[i]
+        i += 1
+    return parts
 
 
 def flee_pct(capture_rate):

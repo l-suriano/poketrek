@@ -29,7 +29,7 @@ static const char *const TYPE_NAME_EN[T_COUNT] = {
   "Normal", "Fighting", "Flying", "Poison", "Ground", "Rock", "Bug", "Ghost", "Fire", "Water", "Grass", "Electric", "Psychic", "Ice", "Dragon"
 };
 static const char *const TYPE_NAME_ES[T_COUNT] = {
-  "Normal", "Lucha", "Volador", "Veneno", "Tierra", "Roca", "Bicho", "Fantasma", "Fuego", "Agua", "Planta", "Eléctrico", "Psíquico", "Hielo", "Dragón"
+  "Normal", "Lucha", "Volador", "Veneno", "Tierra", "Roca", "Bicho", "Fantasma", "Fuego", "Agua", "Planta", "El\202ctrico", "Ps\241quico", "Hielo", "Drag\242n"
 };
 
 // eficacia x2: 0 inmune, 1 = x0.5, 2 = x1, 4 = x2 [atacante][defensor].
@@ -84,15 +84,15 @@ struct MoveInfo {
 static const MoveInfo MOVE_TBL[NUM_MOVES + 1] = {
   { "-", "-", T_NORMAL, 0, 0, 0, 0, 0, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },
   { "Pound", "Destructor", T_NORMAL, 40, 100, 35, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 1 pound
-  { "Karate Chop", "Golpe Kárate", T_NORMAL, 50, 100, 25, 0, MC_DAMAGE, AIL_NONE, 0, 0, 1, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 2 karate-chop
-  { "Double Slap", "Doble Bofetón", T_NORMAL, 15, 85, 10, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 2, 5, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 3 double-slap
-  { "Comet Punch", "Puño Cometa", T_NORMAL, 18, 85, 15, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 2, 5, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 4 comet-punch
-  { "Mega Punch", "Megapuño", T_NORMAL, 80, 85, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 5 mega-punch
-  { "Pay Day", "Día de Pago", T_NORMAL, 40, 100, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 6 pay-day
-  { "Fire Punch", "Puño Fuego", T_FIRE, 75, 100, 15, 0, MC_DAMAGE_AILMENT, AIL_BURN, 10, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 7 fire-punch
-  { "Ice Punch", "Puño Hielo", T_ICE, 75, 100, 15, 0, MC_DAMAGE_AILMENT, AIL_FREEZE, 10, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 8 ice-punch
-  { "Thunder Punch", "Puño Trueno", T_ELECTRIC, 75, 100, 15, 0, MC_DAMAGE_AILMENT, AIL_PARALYSIS, 10, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 9 thunder-punch
-  { "Scratch", "Arañazo", T_NORMAL, 40, 100, 35, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 10 scratch
+  { "Karate Chop", "Golpe K\240rate", T_NORMAL, 50, 100, 25, 0, MC_DAMAGE, AIL_NONE, 0, 0, 1, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 2 karate-chop
+  { "Double Slap", "Doble Bofet\242n", T_NORMAL, 15, 85, 10, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 2, 5, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 3 double-slap
+  { "Comet Punch", "Pu\244o Cometa", T_NORMAL, 18, 85, 15, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 2, 5, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 4 comet-punch
+  { "Mega Punch", "Megapu\244o", T_NORMAL, 80, 85, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 5 mega-punch
+  { "Pay Day", "D\241a de Pago", T_NORMAL, 40, 100, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 6 pay-day
+  { "Fire Punch", "Pu\244o Fuego", T_FIRE, 75, 100, 15, 0, MC_DAMAGE_AILMENT, AIL_BURN, 10, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 7 fire-punch
+  { "Ice Punch", "Pu\244o Hielo", T_ICE, 75, 100, 15, 0, MC_DAMAGE_AILMENT, AIL_FREEZE, 10, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 8 ice-punch
+  { "Thunder Punch", "Pu\244o Trueno", T_ELECTRIC, 75, 100, 15, 0, MC_DAMAGE_AILMENT, AIL_PARALYSIS, 10, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 9 thunder-punch
+  { "Scratch", "Ara\244azo", T_NORMAL, 40, 100, 35, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 10 scratch
   { "Vise Grip", "Agarre", T_NORMAL, 55, 100, 30, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 11 vice-grip
   { "Guillotine", "Guillotina", T_NORMAL, 0, 30, 5, 0, MC_OHKO, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 12 guillotine
   { "Razor Wind", "Viento Cortante", T_NORMAL, 80, 75, 10, 0, MC_DAMAGE, AIL_NONE, 0, 0, 1, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 13 razor-wind
@@ -104,8 +104,8 @@ static const MoveInfo MOVE_TBL[NUM_MOVES + 1] = {
   { "Fly", "Vuelo", T_FLYING, 70, 95, 15, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 19 fly
   { "Bind", "Atadura", T_NORMAL, 15, 75, 20, 0, MC_DAMAGE_AILMENT, AIL_TRAP, 100, 0, 0, 0, 0, 0, 0, 5, 6, ST_NONE, 0, ST_NONE, 0, 0 },  // 20 bind
   { "Slam", "Atizar", T_NORMAL, 80, 75, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 21 slam
-  { "Vine Whip", "Látigo Cepa", T_GRASS, 35, 100, 10, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 22 vine-whip
-  { "Stomp", "Pisotón", T_NORMAL, 65, 100, 20, 0, MC_DAMAGE, AIL_NONE, 30, 30, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 23 stomp
+  { "Vine Whip", "L\240tigo Cepa", T_GRASS, 35, 100, 10, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 22 vine-whip
+  { "Stomp", "Pisot\242n", T_NORMAL, 65, 100, 20, 0, MC_DAMAGE, AIL_NONE, 30, 30, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 23 stomp
   { "Double Kick", "Doble Patada", T_FIGHTING, 30, 100, 30, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 2, 2, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 24 double-kick
   { "Mega Kick", "Megapatada", T_NORMAL, 120, 75, 5, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 25 mega-kick
   { "Jump Kick", "Patada Salto", T_FIGHTING, 70, 95, 25, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 26 jump-kick
@@ -117,9 +117,9 @@ static const MoveInfo MOVE_TBL[NUM_MOVES + 1] = {
   { "Horn Drill", "Perforador", T_NORMAL, 0, 30, 5, 0, MC_OHKO, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 32 horn-drill
   { "Tackle", "Placaje", T_NORMAL, 35, 95, 35, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 33 tackle
   { "Body Slam", "Golpe Cuerpo", T_NORMAL, 85, 100, 15, 0, MC_DAMAGE_AILMENT, AIL_PARALYSIS, 30, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 34 body-slam
-  { "Wrap", "Constricción", T_NORMAL, 15, 85, 20, 0, MC_DAMAGE_AILMENT, AIL_TRAP, 100, 0, 0, 0, 0, 0, 0, 2, 4, ST_NONE, 0, ST_NONE, 0, 0 },  // 35 wrap
+  { "Wrap", "Constricci\242n", T_NORMAL, 15, 85, 20, 0, MC_DAMAGE_AILMENT, AIL_TRAP, 100, 0, 0, 0, 0, 0, 0, 2, 4, ST_NONE, 0, ST_NONE, 0, 0 },  // 35 wrap
   { "Take Down", "Derribo", T_NORMAL, 90, 85, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, -25, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 36 take-down
-  { "Thrash", "Saña", T_NORMAL, 90, 100, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 37 thrash
+  { "Thrash", "Sa\244a", T_NORMAL, 90, 100, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 37 thrash
   { "Double-Edge", "Doble Filo", T_NORMAL, 100, 100, 15, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, -33, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 38 double-edge
   { "Tail Whip", "Agitacola", T_NORMAL, 0, 100, 30, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_DEFENSE, -1, ST_NONE, 0, 0 },  // 39 tail-whip
   { "Poison Sting", "Picotazo Veneno", T_POISON, 15, 100, 35, 0, MC_DAMAGE_AILMENT, AIL_POISON, 20, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 40 poison-sting
@@ -127,13 +127,13 @@ static const MoveInfo MOVE_TBL[NUM_MOVES + 1] = {
   { "Pin Missile", "Pin Misil", T_BUG, 14, 85, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 2, 5, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 42 pin-missile
   { "Leer", "Malicioso", T_NORMAL, 0, 100, 30, 0, MC_NET_GOOD_STATS, AIL_NONE, 100, 0, 0, 0, 0, 0, 0, 0, 0, ST_DEFENSE, -1, ST_NONE, 0, 0 },  // 43 leer
   { "Bite", "Mordisco", T_NORMAL, 60, 100, 25, 0, MC_DAMAGE, AIL_NONE, 10, 10, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 44 bite
-  { "Growl", "Gruñido", T_NORMAL, 0, 100, 40, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_ATTACK, -1, ST_NONE, 0, 0 },  // 45 growl
+  { "Growl", "Gru\244ido", T_NORMAL, 0, 100, 40, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_ATTACK, -1, ST_NONE, 0, 0 },  // 45 growl
   { "Roar", "Rugido", T_NORMAL, 0, 100, 20, -6, MC_FORCE_SWITCH, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 46 roar
   { "Sing", "Canto", T_NORMAL, 0, 55, 15, 0, MC_AILMENT, AIL_SLEEP, 0, 0, 0, 0, 0, 0, 0, 2, 4, ST_NONE, 0, ST_NONE, 0, 0 },  // 47 sing
-  { "Supersonic", "Supersónico", T_NORMAL, 0, 55, 20, 0, MC_AILMENT, AIL_CONFUSION, 0, 0, 0, 0, 0, 0, 0, 2, 5, ST_NONE, 0, ST_NONE, 0, 0 },  // 48 supersonic
-  { "Sonic Boom", "Bomba Sónica", T_NORMAL, 0, 90, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 49 sonic-boom
-  { "Disable", "Anulación", T_NORMAL, 0, 55, 20, 0, MC_UNIQUE, AIL_DISABLE, 0, 0, 0, 0, 0, 0, 0, 4, 4, ST_NONE, 0, ST_NONE, 0, 0 },  // 50 disable
-  { "Acid", "Ácido", T_POISON, 40, 100, 30, 0, MC_DAMAGE_LOWER, AIL_NONE, 10, 0, 0, 0, 0, 0, 0, 0, 0, ST_SPECIAL, -1, ST_NONE, 0, 0 },  // 51 acid
+  { "Supersonic", "Supers\242nico", T_NORMAL, 0, 55, 20, 0, MC_AILMENT, AIL_CONFUSION, 0, 0, 0, 0, 0, 0, 0, 2, 5, ST_NONE, 0, ST_NONE, 0, 0 },  // 48 supersonic
+  { "Sonic Boom", "Bomba S\242nica", T_NORMAL, 0, 90, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 49 sonic-boom
+  { "Disable", "Anulaci\242n", T_NORMAL, 0, 55, 20, 0, MC_UNIQUE, AIL_DISABLE, 0, 0, 0, 0, 0, 0, 0, 4, 4, ST_NONE, 0, ST_NONE, 0, 0 },  // 50 disable
+  { "Acid", "Acido", T_POISON, 40, 100, 30, 0, MC_DAMAGE_LOWER, AIL_NONE, 10, 0, 0, 0, 0, 0, 0, 0, 0, ST_SPECIAL, -1, ST_NONE, 0, 0 },  // 51 acid
   { "Ember", "Ascuas", T_FIRE, 40, 100, 25, 0, MC_DAMAGE_AILMENT, AIL_BURN, 10, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 52 ember
   { "Flamethrower", "Lanzallamas", T_FIRE, 95, 100, 15, 0, MC_DAMAGE_AILMENT, AIL_BURN, 10, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 53 flamethrower
   { "Mist", "Neblina", T_ICE, 0, 0, 30, 0, MC_FIELD_EFFECT, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 1 },  // 54 mist
@@ -148,10 +148,10 @@ static const MoveInfo MOVE_TBL[NUM_MOVES + 1] = {
   { "Hyper Beam", "Hiperrayo", T_NORMAL, 150, 90, 5, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 63 hyper-beam
   { "Peck", "Picotazo", T_FLYING, 35, 100, 35, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 64 peck
   { "Drill Peck", "Pico Taladro", T_FLYING, 80, 100, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 65 drill-peck
-  { "Submission", "Sumisión", T_FIGHTING, 80, 80, 25, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, -25, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 66 submission
+  { "Submission", "Sumisi\242n", T_FIGHTING, 80, 80, 25, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, -25, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 66 submission
   { "Low Kick", "Patada Baja", T_FIGHTING, 50, 90, 20, 0, MC_DAMAGE, AIL_NONE, 30, 30, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 67 low-kick
   { "Counter", "Contraataque", T_FIGHTING, 0, 100, 20, -5, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 68 counter
-  { "Seismic Toss", "Sísmico", T_FIGHTING, 0, 100, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 69 seismic-toss
+  { "Seismic Toss", "S\241smico", T_FIGHTING, 0, 100, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 69 seismic-toss
   { "Strength", "Fuerza", T_NORMAL, 80, 100, 15, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 70 strength
   { "Absorb", "Absorber", T_GRASS, 20, 100, 20, 0, MC_DAMAGE_HEAL, AIL_NONE, 0, 0, 0, 50, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 71 absorb
   { "Mega Drain", "Megaagotar", T_GRASS, 40, 100, 10, 0, MC_DAMAGE_HEAL, AIL_NONE, 0, 0, 0, 50, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 72 mega-drain
@@ -161,10 +161,10 @@ static const MoveInfo MOVE_TBL[NUM_MOVES + 1] = {
   { "Solar Beam", "Rayo Solar", T_GRASS, 120, 100, 10, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 76 solar-beam
   { "Poison Powder", "Polvo Veneno", T_POISON, 0, 75, 35, 0, MC_AILMENT, AIL_POISON, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 77 poison-powder
   { "Stun Spore", "Paralizador", T_GRASS, 0, 75, 30, 0, MC_AILMENT, AIL_PARALYSIS, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 78 stun-spore
-  { "Sleep Powder", "Somnífero", T_GRASS, 0, 75, 15, 0, MC_AILMENT, AIL_SLEEP, 0, 0, 0, 0, 0, 0, 0, 2, 4, ST_NONE, 0, ST_NONE, 0, 0 },  // 79 sleep-powder
-  { "Petal Dance", "Danza Pétalo", T_GRASS, 70, 100, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 80 petal-dance
+  { "Sleep Powder", "Somn\241fero", T_GRASS, 0, 75, 15, 0, MC_AILMENT, AIL_SLEEP, 0, 0, 0, 0, 0, 0, 0, 2, 4, ST_NONE, 0, ST_NONE, 0, 0 },  // 79 sleep-powder
+  { "Petal Dance", "Danza P\202talo", T_GRASS, 70, 100, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 80 petal-dance
   { "String Shot", "Disparo Demora", T_BUG, 0, 95, 40, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_SPEED, -2, ST_NONE, 0, 0 },  // 81 string-shot
-  { "Dragon Rage", "Furia Dragón", T_DRAGON, 0, 100, 10, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 82 dragon-rage
+  { "Dragon Rage", "Furia Drag\242n", T_DRAGON, 0, 100, 10, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 82 dragon-rage
   { "Fire Spin", "Giro Fuego", T_FIRE, 15, 70, 15, 0, MC_DAMAGE_AILMENT, AIL_TRAP, 100, 0, 0, 0, 0, 0, 0, 5, 6, ST_NONE, 0, ST_NONE, 0, 0 },  // 83 fire-spin
   { "Thunder Shock", "Impactrueno", T_ELECTRIC, 40, 100, 30, 0, MC_DAMAGE_AILMENT, AIL_PARALYSIS, 10, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 84 thunder-shock
   { "Thunderbolt", "Rayo", T_ELECTRIC, 95, 100, 15, 0, MC_DAMAGE_AILMENT, AIL_PARALYSIS, 10, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 85 thunderbolt
@@ -174,22 +174,22 @@ static const MoveInfo MOVE_TBL[NUM_MOVES + 1] = {
   { "Earthquake", "Terremoto", T_GROUND, 100, 100, 10, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 89 earthquake
   { "Fissure", "Fisura", T_GROUND, 0, 30, 5, 0, MC_OHKO, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 90 fissure
   { "Dig", "Excavar", T_GROUND, 100, 100, 10, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 91 dig
-  { "Toxic", "Tóxico", T_POISON, 0, 85, 10, 0, MC_AILMENT, AIL_POISON, 0, 0, 0, 0, 0, 0, 0, 15, 15, ST_NONE, 0, ST_NONE, 0, 0 },  // 92 toxic
-  { "Confusion", "Confusión", T_PSYCHIC, 50, 100, 25, 0, MC_DAMAGE_AILMENT, AIL_CONFUSION, 10, 0, 0, 0, 0, 0, 0, 2, 5, ST_NONE, 0, ST_NONE, 0, 0 },  // 93 confusion
-  { "Psychic", "Psíquico", T_PSYCHIC, 90, 100, 10, 0, MC_DAMAGE_LOWER, AIL_NONE, 30, 0, 0, 0, 0, 0, 0, 0, 0, ST_SPECIAL, -1, ST_NONE, 0, 0 },  // 94 psychic
+  { "Toxic", "T\242xico", T_POISON, 0, 85, 10, 0, MC_AILMENT, AIL_POISON, 0, 0, 0, 0, 0, 0, 0, 15, 15, ST_NONE, 0, ST_NONE, 0, 0 },  // 92 toxic
+  { "Confusion", "Confusi\242n", T_PSYCHIC, 50, 100, 25, 0, MC_DAMAGE_AILMENT, AIL_CONFUSION, 10, 0, 0, 0, 0, 0, 0, 2, 5, ST_NONE, 0, ST_NONE, 0, 0 },  // 93 confusion
+  { "Psychic", "Ps\241quico", T_PSYCHIC, 90, 100, 10, 0, MC_DAMAGE_LOWER, AIL_NONE, 30, 0, 0, 0, 0, 0, 0, 0, 0, ST_SPECIAL, -1, ST_NONE, 0, 0 },  // 94 psychic
   { "Hypnosis", "Hipnosis", T_PSYCHIC, 0, 60, 20, 0, MC_AILMENT, AIL_SLEEP, 0, 0, 0, 0, 0, 0, 0, 2, 4, ST_NONE, 0, ST_NONE, 0, 0 },  // 95 hypnosis
-  { "Meditate", "Meditación", T_PSYCHIC, 0, 0, 40, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_ATTACK, 1, ST_NONE, 0, 1 },  // 96 meditate
+  { "Meditate", "Meditaci\242n", T_PSYCHIC, 0, 0, 40, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_ATTACK, 1, ST_NONE, 0, 1 },  // 96 meditate
   { "Agility", "Agilidad", T_PSYCHIC, 0, 0, 30, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_SPEED, 2, ST_NONE, 0, 1 },  // 97 agility
-  { "Quick Attack", "Ataque Rápido", T_NORMAL, 40, 100, 30, 1, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 98 quick-attack
+  { "Quick Attack", "Ataque R\240pido", T_NORMAL, 40, 100, 30, 1, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 98 quick-attack
   { "Rage", "Furia", T_NORMAL, 20, 100, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 99 rage
   { "Teleport", "Teletransporte", T_PSYCHIC, 0, 0, 20, -6, MC_UNIQUE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 1 },  // 100 teleport
   { "Night Shade", "Tinieblas", T_GHOST, 0, 100, 15, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 101 night-shade
-  { "Mimic", "Mimético", T_NORMAL, 0, 0, 10, 0, MC_UNIQUE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 102 mimic
+  { "Mimic", "Mim\202tico", T_NORMAL, 0, 0, 10, 0, MC_UNIQUE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 102 mimic
   { "Screech", "Chirrido", T_NORMAL, 0, 85, 40, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_DEFENSE, -2, ST_NONE, 0, 0 },  // 103 screech
   { "Double Team", "Doble Equipo", T_NORMAL, 0, 0, 15, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_EVASION, 1, ST_NONE, 0, 1 },  // 104 double-team
-  { "Recover", "Recuperación", T_NORMAL, 0, 0, 20, 0, MC_HEAL, AIL_NONE, 0, 0, 0, 0, 50, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 1 },  // 105 recover
+  { "Recover", "Recuperaci\242n", T_NORMAL, 0, 0, 20, 0, MC_HEAL, AIL_NONE, 0, 0, 0, 0, 50, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 1 },  // 105 recover
   { "Harden", "Fortaleza", T_NORMAL, 0, 0, 30, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_DEFENSE, 1, ST_NONE, 0, 1 },  // 106 harden
-  { "Minimize", "Reducción", T_NORMAL, 0, 0, 20, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_EVASION, 2, ST_NONE, 0, 1 },  // 107 minimize
+  { "Minimize", "Reducci\242n", T_NORMAL, 0, 0, 20, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_EVASION, 2, ST_NONE, 0, 1 },  // 107 minimize
   { "Smokescreen", "Pantalla de Humo", T_NORMAL, 0, 100, 20, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_ACCURACY, -1, ST_NONE, 0, 0 },  // 108 smokescreen
   { "Confuse Ray", "Rayo Confuso", T_GHOST, 0, 100, 10, 0, MC_AILMENT, AIL_CONFUSION, 0, 0, 0, 0, 0, 0, 0, 2, 5, ST_NONE, 0, ST_NONE, 0, 0 },  // 109 confuse-ray
   { "Withdraw", "Refugio", T_WATER, 0, 0, 40, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_DEFENSE, 1, ST_NONE, 0, 1 },  // 110 withdraw
@@ -198,14 +198,14 @@ static const MoveInfo MOVE_TBL[NUM_MOVES + 1] = {
   { "Light Screen", "Pantalla de Luz", T_PSYCHIC, 0, 0, 30, 0, MC_FIELD_EFFECT, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 1 },  // 113 light-screen
   { "Haze", "Niebla", T_ICE, 0, 0, 30, 0, MC_WHOLE_FIELD_EFFECT, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 114 haze
   { "Reflect", "Reflejo", T_PSYCHIC, 0, 0, 20, 0, MC_FIELD_EFFECT, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 1 },  // 115 reflect
-  { "Focus Energy", "Foco Energía", T_NORMAL, 0, 0, 30, 0, MC_UNIQUE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 1 },  // 116 focus-energy
+  { "Focus Energy", "Foco Energ\241a", T_NORMAL, 0, 0, 30, 0, MC_UNIQUE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 1 },  // 116 focus-energy
   { "Bide", "Venganza", T_NORMAL, 0, 0, 10, 1, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 1 },  // 117 bide
-  { "Metronome", "Metrónomo", T_NORMAL, 0, 0, 10, 0, MC_UNIQUE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 1 },  // 118 metronome
+  { "Metronome", "Metr\242nomo", T_NORMAL, 0, 0, 10, 0, MC_UNIQUE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 1 },  // 118 metronome
   { "Mirror Move", "Espejo", T_FLYING, 0, 0, 20, 0, MC_UNIQUE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 119 mirror-move
-  { "Self-Destruct", "Autodestrucción", T_NORMAL, 130, 100, 5, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 120 self-destruct
+  { "Self-Destruct", "Autodestrucci\242n", T_NORMAL, 130, 100, 5, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 120 self-destruct
   { "Egg Bomb", "Bomba Huevo", T_NORMAL, 100, 75, 10, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 121 egg-bomb
-  { "Lick", "Lengüetazo", T_GHOST, 20, 100, 30, 0, MC_DAMAGE_AILMENT, AIL_PARALYSIS, 30, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 122 lick
-  { "Smog", "Polución", T_POISON, 20, 70, 20, 0, MC_DAMAGE_AILMENT, AIL_POISON, 40, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 123 smog
+  { "Lick", "Leng\201etazo", T_GHOST, 20, 100, 30, 0, MC_DAMAGE_AILMENT, AIL_PARALYSIS, 30, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 122 lick
+  { "Smog", "Poluci\242n", T_POISON, 20, 70, 20, 0, MC_DAMAGE_AILMENT, AIL_POISON, 40, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 123 smog
   { "Sludge", "Residuos", T_POISON, 65, 100, 20, 0, MC_DAMAGE_AILMENT, AIL_POISON, 30, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 124 sludge
   { "Bone Club", "Hueso Palo", T_GROUND, 65, 85, 20, 0, MC_DAMAGE, AIL_NONE, 10, 10, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 125 bone-club
   { "Fire Blast", "Llamarada", T_FIRE, 120, 85, 5, 0, MC_DAMAGE_AILMENT, AIL_BURN, 30, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 126 fire-blast
@@ -213,36 +213,36 @@ static const MoveInfo MOVE_TBL[NUM_MOVES + 1] = {
   { "Clamp", "Tenaza", T_WATER, 35, 75, 10, 0, MC_DAMAGE_AILMENT, AIL_TRAP, 100, 0, 0, 0, 0, 0, 0, 5, 6, ST_NONE, 0, ST_NONE, 0, 0 },  // 128 clamp
   { "Swift", "Meteoros", T_NORMAL, 60, 0, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 129 swift
   { "Skull Bash", "Cabezazo", T_NORMAL, 100, 100, 15, 0, MC_DAMAGE, AIL_NONE, 100, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 130 skull-bash
-  { "Spike Cannon", "Clavo Cañón", T_NORMAL, 20, 100, 15, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 2, 5, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 131 spike-cannon
-  { "Constrict", "Restricción", T_NORMAL, 10, 100, 35, 0, MC_DAMAGE_LOWER, AIL_NONE, 10, 0, 0, 0, 0, 0, 0, 0, 0, ST_SPEED, -1, ST_NONE, 0, 0 },  // 132 constrict
+  { "Spike Cannon", "Clavo Ca\244\242n", T_NORMAL, 20, 100, 15, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 2, 5, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 131 spike-cannon
+  { "Constrict", "Restricci\242n", T_NORMAL, 10, 100, 35, 0, MC_DAMAGE_LOWER, AIL_NONE, 10, 0, 0, 0, 0, 0, 0, 0, 0, ST_SPEED, -1, ST_NONE, 0, 0 },  // 132 constrict
   { "Amnesia", "Amnesia", T_PSYCHIC, 0, 0, 20, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_SPECIAL, 2, ST_NONE, 0, 1 },  // 133 amnesia
-  { "Kinesis", "Kinético", T_PSYCHIC, 0, 80, 15, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_ACCURACY, -1, ST_NONE, 0, 0 },  // 134 kinesis
-  { "Soft-Boiled", "Ovocuración", T_NORMAL, 0, 0, 5, 0, MC_HEAL, AIL_NONE, 0, 0, 0, 0, 50, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 1 },  // 135 soft-boiled
+  { "Kinesis", "Kin\202tico", T_PSYCHIC, 0, 80, 15, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_ACCURACY, -1, ST_NONE, 0, 0 },  // 134 kinesis
+  { "Soft-Boiled", "Ovocuraci\242n", T_NORMAL, 0, 0, 5, 0, MC_HEAL, AIL_NONE, 0, 0, 0, 0, 50, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 1 },  // 135 soft-boiled
   { "High Jump Kick", "Patada Salto Alta", T_FIGHTING, 85, 90, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 136 high-jump-kick
   { "Glare", "Deslumbrar", T_NORMAL, 0, 75, 30, 0, MC_AILMENT, AIL_PARALYSIS, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 137 glare
-  { "Dream Eater", "Comesueños", T_PSYCHIC, 100, 100, 15, 0, MC_DAMAGE_HEAL, AIL_NONE, 0, 0, 0, 50, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 138 dream-eater
+  { "Dream Eater", "Comesue\244os", T_PSYCHIC, 100, 100, 15, 0, MC_DAMAGE_HEAL, AIL_NONE, 0, 0, 0, 50, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 138 dream-eater
   { "Poison Gas", "Gas Venenoso", T_POISON, 0, 55, 40, 0, MC_AILMENT, AIL_POISON, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 139 poison-gas
   { "Barrage", "Bombardeo", T_NORMAL, 15, 85, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 2, 5, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 140 barrage
   { "Leech Life", "Chupavidas", T_BUG, 20, 100, 15, 0, MC_DAMAGE_HEAL, AIL_NONE, 0, 0, 0, 50, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 141 leech-life
   { "Lovely Kiss", "Beso Amoroso", T_NORMAL, 0, 75, 10, 0, MC_AILMENT, AIL_SLEEP, 0, 0, 0, 0, 0, 0, 0, 2, 4, ST_NONE, 0, ST_NONE, 0, 0 },  // 142 lovely-kiss
-  { "Sky Attack", "Ataque Aéreo", T_FLYING, 140, 90, 5, 0, MC_DAMAGE, AIL_NONE, 10, 10, 1, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 143 sky-attack
-  { "Transform", "Transformación", T_NORMAL, 0, 0, 10, 0, MC_UNIQUE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 144 transform
+  { "Sky Attack", "Ataque A\202reo", T_FLYING, 140, 90, 5, 0, MC_DAMAGE, AIL_NONE, 10, 10, 1, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 143 sky-attack
+  { "Transform", "Transformaci\242n", T_NORMAL, 0, 0, 10, 0, MC_UNIQUE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 144 transform
   { "Bubble", "Burbuja", T_WATER, 20, 100, 30, 0, MC_DAMAGE_LOWER, AIL_NONE, 10, 0, 0, 0, 0, 0, 0, 0, 0, ST_SPEED, -1, ST_NONE, 0, 0 },  // 145 bubble
-  { "Dizzy Punch", "Puño Mareo", T_NORMAL, 70, 100, 10, 0, MC_DAMAGE_AILMENT, AIL_CONFUSION, 0, 0, 0, 0, 0, 0, 0, 2, 5, ST_NONE, 0, ST_NONE, 0, 0 },  // 146 dizzy-punch
+  { "Dizzy Punch", "Pu\244o Mareo", T_NORMAL, 70, 100, 10, 0, MC_DAMAGE_AILMENT, AIL_CONFUSION, 0, 0, 0, 0, 0, 0, 0, 2, 5, ST_NONE, 0, ST_NONE, 0, 0 },  // 146 dizzy-punch
   { "Spore", "Espora", T_GRASS, 0, 100, 15, 0, MC_AILMENT, AIL_SLEEP, 0, 0, 0, 0, 0, 0, 0, 2, 4, ST_NONE, 0, ST_NONE, 0, 0 },  // 147 spore
   { "Flash", "Destello", T_NORMAL, 0, 70, 20, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_ACCURACY, -1, ST_NONE, 0, 0 },  // 148 flash
   { "Psywave", "Psicoonda", T_PSYCHIC, 0, 80, 15, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 149 psywave
   { "Splash", "Salpicadura", T_NORMAL, 0, 0, 40, 0, MC_UNIQUE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 1 },  // 150 splash
-  { "Acid Armor", "Armadura Ácida", T_POISON, 0, 0, 40, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_DEFENSE, 2, ST_NONE, 0, 1 },  // 151 acid-armor
+  { "Acid Armor", "Armadura Acida", T_POISON, 0, 0, 40, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_DEFENSE, 2, ST_NONE, 0, 1 },  // 151 acid-armor
   { "Crabhammer", "Martillazo", T_WATER, 90, 85, 10, 0, MC_DAMAGE, AIL_NONE, 0, 0, 1, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 152 crabhammer
-  { "Explosion", "Explosión", T_NORMAL, 170, 100, 5, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 153 explosion
+  { "Explosion", "Explosi\242n", T_NORMAL, 170, 100, 5, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 153 explosion
   { "Fury Swipes", "Golpes Furia", T_NORMAL, 18, 80, 15, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 2, 5, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 154 fury-swipes
   { "Bonemerang", "Huesomerang", T_GROUND, 50, 90, 10, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 2, 2, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 155 bonemerang
   { "Rest", "Descanso", T_PSYCHIC, 0, 0, 5, 0, MC_UNIQUE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 1 },  // 156 rest
   { "Rock Slide", "Avalancha", T_ROCK, 75, 90, 10, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 157 rock-slide
   { "Hyper Fang", "Hipercolmillo", T_NORMAL, 80, 90, 15, 0, MC_DAMAGE, AIL_NONE, 10, 10, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 158 hyper-fang
   { "Sharpen", "Afilar", T_NORMAL, 0, 0, 30, 0, MC_NET_GOOD_STATS, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_ATTACK, 1, ST_NONE, 0, 1 },  // 159 sharpen
-  { "Conversion", "Conversión", T_NORMAL, 0, 0, 30, 0, MC_UNIQUE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 1 },  // 160 conversion
+  { "Conversion", "Conversi\242n", T_NORMAL, 0, 0, 30, 0, MC_UNIQUE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 1 },  // 160 conversion
   { "Tri Attack", "Triataque", T_NORMAL, 80, 100, 10, 0, MC_DAMAGE_AILMENT, AIL_UNKNOWN, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 161 tri-attack
   { "Super Fang", "Superdiente", T_NORMAL, 0, 90, 10, 0, MC_DAMAGE, AIL_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 162 super-fang
   { "Slash", "Cuchillada", T_NORMAL, 70, 100, 20, 0, MC_DAMAGE, AIL_NONE, 0, 0, 1, 0, 0, 0, 0, 0, 0, ST_NONE, 0, ST_NONE, 0, 0 },  // 163 slash
