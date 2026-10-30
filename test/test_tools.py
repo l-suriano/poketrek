@@ -138,6 +138,77 @@ class TestDexData(unittest.TestCase):
                     self.assertLessEqual(len(name), 8, f'{num} {lang} no cabe en pantalla: {name}')
 
 
+class TestBattleData(unittest.TestCase):
+    """Los datos de batalla son los de gen 1 y no los actuales de PokeAPI."""
+
+    @classmethod
+    def setUpClass(cls):
+        import battle_data as bd
+        cls.bd = bd
+        cls.mv = {m['slug']: m for m in bd.MOVES.values()}
+
+    def test_estan_las_151_especies_y_los_165_movimientos(self):
+        self.assertEqual(sorted(self.bd.SPECIES), list(range(1, 152)))
+        self.assertEqual(sorted(self.bd.MOVES), list(range(1, 166)))
+
+    def test_tipos_de_especie_de_gen_1(self):
+        sp = self.bd.SPECIES
+        self.assertEqual(sp[35]['types'], ('normal', None))     # Clefairy, sin hada
+        self.assertEqual(sp[81]['types'], ('electric', None))   # Magnemite, sin acero
+        self.assertEqual(sp[122]['types'], ('psychic', None))   # Mr. Mime
+        self.assertEqual(sp[6]['types'], ('fire', 'flying'))
+
+    def test_special_unico_de_gen_1(self):
+        sp = self.bd.SPECIES
+        self.assertEqual(sp[150]['special'], 154)  # Mewtwo
+        self.assertEqual(sp[113]['special'], 105)  # Chansey
+        self.assertEqual(sp[65]['special'], 135)   # Alakazam
+
+    def test_movimientos_con_valores_de_gen_1(self):
+        self.assertEqual(self.mv['bite']['type'], 'normal')
+        self.assertEqual(self.mv['karate-chop']['type'], 'normal')
+        self.assertEqual(self.mv['gust']['type'], 'normal')
+        self.assertEqual(self.mv['growth']['stat_changes'], [('special', 1)])
+        for m in self.bd.MOVES.values():
+            self.assertIn(m['type'], self.bd.TYPES, m['slug'])
+            self.assertTrue(m['en'] and m['es'], f"{m['slug']} sin nombre EN/ES")
+
+    def test_tabla_de_tipos_de_gen_1(self):
+        tc = self.bd.TYPE_CHART
+        self.assertEqual(tc['bug>poison'], 2.0)
+        self.assertEqual(tc['poison>bug'], 2.0)
+        self.assertNotIn('ice>fire', tc)  # x1 en gen 1
+        self.assertEqual(tc['ghost>psychic'], 0.0)  # el bug original; gen_battle.py lo corrige
+
+    def test_mt_de_los_gimnasios(self):
+        # las MT que dan los lideres en las reglas de PokeTrek
+        esperadas = {'TM34': 'bide', 'TM48': 'rock-slide', 'TM26': 'earthquake', 'TM12': 'water-gun',
+                     'TM11': 'bubble-beam', 'TM13': 'ice-beam', 'TM45': 'thunder-wave',
+                     'TM24': 'thunderbolt', 'TM25': 'thunder', 'TM21': 'mega-drain',
+                     'TM22': 'solar-beam', 'TM06': 'toxic', 'TM46': 'psywave', 'TM29': 'psychic',
+                     'TM42': 'dream-eater', 'TM38': 'fire-blast', 'TM28': 'dig', 'TM27': 'fissure'}
+        for tm, slug in esperadas.items():
+            self.assertEqual(self.bd.MOVES[self.bd.MACHINES[tm]]['slug'], slug, tm)
+        self.assertEqual(len(self.bd.MACHINES), 55)  # 50 MT + 5 MO
+
+    def test_evoluciones_de_gen_1(self):
+        evos = self.bd.EVOLUTIONS
+        self.assertEqual(len(evos), 72)
+        self.assertIn((25, 26, 'item', 'thunder-stone'), evos)
+        self.assertIn((64, 65, 'trade', None), evos)
+        self.assertIn((27, 28, 'level', 22), evos)
+        self.assertEqual({e[1] for e in evos if e[0] == 133}, {134, 135, 136})
+        for frm, to, _how, _param in evos:
+            self.assertTrue(1 <= frm <= 151 and 1 <= to <= 151)
+
+    def test_aprendizaje_por_nivel(self):
+        pika = [(lv, self.bd.MOVES[m]['slug']) for lv, m in self.bd.LEARNSET[25]]
+        self.assertIn((1, 'thunder-shock'), pika)
+        self.assertIn((43, 'thunder'), pika)
+        for num, learn in self.bd.LEARNSET.items():
+            self.assertTrue(learn, f'{num} no aprende nada por nivel')
+
+
 class TestGeneratedFiles(unittest.TestCase):
     """dex.h esta generado: si no coincide con su generador, alguien lo edito a mano."""
 
@@ -157,8 +228,23 @@ class TestGeneratedFiles(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_gen_battle_reproduce_battle_data_h(self):
+        tmp = tempfile.mkdtemp(prefix='poketrek-gen-')
+        try:
+            shutil.copytree(TOOLS, os.path.join(tmp, 'tools'))
+            r = subprocess.run([sys.executable, os.path.join(tmp, 'tools', 'gen_battle.py')],
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, f'gen_battle.py fallo:\n{r.stderr}')
+            with open(os.path.join(tmp, 'battle_data.h'), encoding='utf-8') as a, \
+                    open(os.path.join(ROOT, 'battle_data.h'), encoding='utf-8') as b:
+                self.assertEqual(a.read(), b.read(),
+                                 'battle_data.h no coincide con lo que genera tools/gen_battle.py '
+                                 '(vuelve a generarlo en vez de editarlo a mano)')
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_los_ficheros_generados_avisan_de_que_lo_son(self):
-        for name in ('dex.h', 'species.h'):
+        for name in ('dex.h', 'species.h', 'battle_data.h'):
             with open(os.path.join(ROOT, name)) as fh:
                 head = fh.read(400)
             self.assertIn('GENERADO', head, f'{name} deberia decir que esta generado')

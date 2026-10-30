@@ -43,16 +43,17 @@ jobs:
           python-version: "3.x"
       - run: pip install pillow
 
-      - name: Regenerate dex.h and species.h
+      - name: Regenerate dex.h, species.h and battle_data.h
         run: |
           python3 tools/gen_dex.py
           python3 tools/sprites.py emit
+          python3 tools/gen_battle.py
 
-      # dex.h y species.h llevan "GENERADO - no editar" en su cabecera; esto pilla
-      # a quien edite la salida en vez del generador, o se olvide de regenerar
-      # tras tocar los datos de origen.
+      # dex.h, species.h y battle_data.h llevan "GENERADO - no editar" en su
+      # cabecera; esto pilla a quien edite la salida en vez del generador, o se
+      # olvide de regenerar tras tocar los datos de origen.
       - name: Fail if regenerating produced a diff
-        run: git diff --exit-code -- dex.h species.h
+        run: git diff --exit-code -- dex.h species.h battle_data.h
 
   tools-lint:
     name: Lint tools/ (ruff)
