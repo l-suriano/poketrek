@@ -2,8 +2,9 @@
 // dificultad (reglas: "Tuning, data & licensing"). Corre en el PC con el mismo
 // motor que la placa.
 //
-//   make            compila y ejecuta con los valores por defecto
-//   ./sim 1000      1000 batallas por casilla (mas lento, mas preciso)
+//   ./sim [N]         tabla de % de victorias con los valores de gyms.cpp
+//   ./sim tune [N]    busca para cada lider el levelPct que deja al jugador
+//                     preparado en el objetivo (TARGET) y lo imprime
 //
 // Dos perfiles de jugador:
 //   casual    6 Pokemon al azar, movimientos por defecto, IA nivel 2, 2 pociones
@@ -13,9 +14,11 @@
 #include "../gyms.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-static const uint8_t LEVELS[] = { 12, 20, 30, 40, 50, 60 };
-#define NUM_LEVELS (sizeof(LEVELS) / sizeof(LEVELS[0]))
+static const uint8_t LEVELS[] = { 10, 15, 20, 25, 32, 40, 45, 52, 60 };
+#define NUM_LEVELS (int)(sizeof(LEVELS) / sizeof(LEVELS[0]))
+#define TARGET 42.5  // centro del 35-50 % de las reglas
 
 static bool isLegendary(uint8_t sp) { return sp == 144 || sp == 145 || sp == 146 || sp == 150 || sp == 151; }
 
@@ -80,13 +83,13 @@ static void buildPlayer(BattleSide &p, uint8_t level, bool prepared, uint8_t gym
 }
 
 // devuelve true si gana el jugador
-static bool fight(uint8_t gym, uint8_t level, bool prepared, uint32_t seed) {
+static bool fight(uint8_t gym, uint8_t level, bool prepared, uint32_t seed, int8_t pct) {
   Rng rng;
   rng.seed(seed * 2654435761u + gym * 97 + level);
   Battle b;
   b = Battle();
   buildPlayer(b.side[0], level, prepared, gym, rng);
-  buildGymTeam(b.side[1], gym, b.side[0], rng);
+  buildGymTeam(b.side[1], gym, b.side[0], rng, pct);
   battleInit(b, rng.next(), false);
   for (int turn = 0; turn < 1500 && !b.outcome; turn++) {
     for (int s = 0; s < 2; s++)
@@ -96,29 +99,80 @@ static bool fight(uint8_t gym, uint8_t level, bool prepared, uint32_t seed) {
   return b.outcome == OUT_WIN0;
 }
 
-int main(int argc, char **argv) {
-  int n = argc > 1 ? atoi(argv[1]) : 300;
-  if (n < 1) n = 1;
-  printf("PokeTrek - %% de victorias del jugador contra cada gimnasio (%d batallas por casilla)\n", n);
-  printf("Jugador con los 6 Pokemon al nivel indicado (Base Level = ese nivel).\n");
-  printf("Objetivo de las reglas: 35-50 %% al primer intento con un equipo bien armado.\n\n");
+static double winRate(uint8_t gym, uint8_t level, bool prepared, int n, int8_t pct) {
+  int wins = 0;
+  for (int i = 0; i < n; i++) wins += fight(gym, level, prepared, (uint32_t)i + 1, pct);
+  return 100.0 * wins / n;
+}
+
+// media sobre los niveles de un tramo de Base Level (los de LEVELS que caen en el)
+static double bandWinRate(uint8_t gym, uint8_t band, bool prepared, int n, int8_t pct) {
+  double sum = 0;
+  int k = 0;
+  for (int l = 0; l < NUM_LEVELS; l++) {
+    if (gymBand(LEVELS[l]) != band) continue;
+    sum += winRate(gym, LEVELS[l], prepared, n, pct);
+    k++;
+  }
+  return k ? sum / k : 0;
+}
+
+static void printTable(int n, const int8_t (*pct)[3]) {
   for (int prof = 1; prof >= 0; prof--) {
     bool prepared = prof == 1;
     printf("== jugador %s ==\n", prepared ? "PREPARADO (cobertura, IA 4, 5 pociones)" : "CASUAL (al azar, IA 2, 2 pociones)");
-    printf("%-10s", "Lider");
-    for (unsigned l = 0; l < NUM_LEVELS; l++) printf("  Nv%-4d", LEVELS[l]);
-    printf("\n");
+    printf("%-10s %-12s", "Lider", "+% por tramo");
+    for (int l = 0; l < NUM_LEVELS; l++) printf("  Nv%-4d", LEVELS[l]);
+    printf("  media\n");
     for (int g = 0; g < NUM_GYMS; g++) {
-      printf("%-10s", GYMS[g].leader);
-      for (unsigned l = 0; l < NUM_LEVELS; l++) {
-        int wins = 0;
-        for (int i = 0; i < n; i++) wins += fight((uint8_t)g, LEVELS[l], prepared, (uint32_t)i + 1);
-        printf("  %4.0f%% ", 100.0 * wins / n);
+      const int8_t *p = pct ? pct[g] : GYMS[g].levelPct;
+      printf("%-10s %3d/%3d/%3d ", GYMS[g].leader, p[0], p[1], p[2]);
+      double sum = 0;
+      for (int l = 0; l < NUM_LEVELS; l++) {
+        double w = winRate((uint8_t)g, LEVELS[l], prepared, n, p[gymBand(LEVELS[l])]);
+        sum += w;
+        printf("  %4.0f%% ", w);
       }
-      printf("\n");
+      printf("  %4.0f%%\n", sum / NUM_LEVELS);
       fflush(stdout);
     }
     printf("\n");
   }
+}
+
+// el % de victorias baja al subir el nivel del lider: busqueda binaria por
+// lider y por tramo; al final imprime las lineas para pegar en gyms.cpp
+static void tune(int n) {
+  int8_t best[NUM_GYMS][3];
+  printf("Buscando el +%% de nivel que deja al jugador PREPARADO en %.1f %% en cada tramo...\n", TARGET);
+  for (int g = 0; g < NUM_GYMS; g++) {
+    for (uint8_t band = 0; band < 3; band++) {
+      int lo = -40, hi = 120;
+      while (hi - lo > 1) {
+        int mid = (lo + hi) / 2;
+        if (bandWinRate((uint8_t)g, band, true, n, (int8_t)mid) > TARGET) lo = mid;
+        else hi = mid;
+      }
+      double wl = bandWinRate((uint8_t)g, band, true, n, (int8_t)lo);
+      double wh = bandWinRate((uint8_t)g, band, true, n, (int8_t)hi);
+      best[g][band] = (int8_t)((wl - TARGET) < (TARGET - wh) ? lo : hi);
+    }
+    printf("  %-10s { %3d, %3d, %3d }\n", GYMS[g].leader, best[g][0], best[g][1], best[g][2]);
+    fflush(stdout);
+  }
+  printf("\n");
+  printTable(n, best);
+}
+
+int main(int argc, char **argv) {
+  bool tuning = argc > 1 && strcmp(argv[1], "tune") == 0;
+  int argN = tuning ? 2 : 1;
+  int n = argc > argN ? atoi(argv[argN]) : 300;
+  if (n < 1) n = 1;
+  printf("PokeTrek - %% de victorias del jugador contra cada gimnasio (%d batallas por casilla)\n", n);
+  printf("Jugador con los 6 Pokemon al nivel indicado (Base Level = ese nivel).\n");
+  printf("Objetivo de las reglas: 35-50 %% al primer intento con un equipo bien armado.\n\n");
+  if (tuning) tune(n);
+  else printTable(n, nullptr);
   return 0;
 }

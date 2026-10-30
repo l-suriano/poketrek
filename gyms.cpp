@@ -1,15 +1,17 @@
 #include "gyms.h"
 
 const GymInfo GYMS[NUM_GYMS] = {
-  // lider       tipo        km  +nv  eq  as   as alto  resto del equipo
-  { "Brock",     T_ROCK,      0, 0, 2,  95, 142, { 74, 111, 138, 140, 27, 104, 0, 0 } },
-  { "Misty",     T_WATER,     3, 1, 3, 120, 131, { 54, 116, 118, 90, 60, 72, 86, 0 } },
-  { "Lt. Surge", T_ELECTRIC,  8, 2, 3,  25, 133, { 100, 81, 125, 0, 0, 0, 0, 0 } },
-  { "Erika",     T_GRASS,    15, 3, 4,  43, 102, { 69, 114, 46, 1, 0, 0, 0, 0 } },
-  { "Koga",      T_POISON,   25, 4, 4, 109,  32, { 88, 23, 41, 48, 72, 29, 0, 0 } },
-  { "Sabrina",   T_PSYCHIC,  35, 5, 5,  63,  63, { 96, 122, 79, 124, 102, 0, 0, 0 } },
-  { "Blaine",    T_FIRE,     50, 6, 5,  58,   4, { 77, 37, 126, 133, 0, 0, 0, 0 } },
-  { "Giovanni",  T_GROUND,   65, 8, 6, 111, 111, { 32, 29, 50, 27, 104, 0, 0, 0 } },
+  // +% de nivel por tramo: afinados con `sim/sim tune` (ver sim/sim.cpp)
+  // Brock y Surge pedian hasta +99 %: con tope de +50 % quedan como los faciles del inicio
+  // lider       tipo        km  +% <25 25-44 45+  IA eq  as   as alto  resto del equipo
+  { "Brock",     T_ROCK,      0, { 50, 50, 50 }, 2, 2,  95, 142, { 74, 111, 138, 140, 27, 104, 0, 0 } },
+  { "Misty",     T_WATER,     3, { 29, 26, 40 }, 2, 3, 120, 131, { 54, 116, 118, 90, 60, 72, 86, 0 } },
+  { "Lt. Surge", T_ELECTRIC,  8, { 50, 50, 50 }, 3, 3,  25, 133, { 100, 81, 125, 0, 0, 0, 0, 0 } },
+  { "Erika",     T_GRASS,    15, { 48, 30, 38 }, 3, 4,  43, 102, { 69, 114, 46, 1, 0, 0, 0, 0 } },
+  { "Koga",      T_POISON,   25, { 43, 22, 25 }, 3, 4, 109,  32, { 88, 23, 41, 48, 72, 29, 0, 0 } },
+  { "Sabrina",   T_PSYCHIC,  35, { -4, -2,  1 }, 4, 5,  63,  63, { 96, 122, 79, 124, 102, 0, 0, 0 } },
+  { "Blaine",    T_FIRE,     50, { 28, 22, 29 }, 4, 5,  58,   4, { 77, 37, 126, 133, 0, 0, 0, 0 } },
+  { "Giovanni",  T_GROUND,   65, { 25, 15, 24 }, 4, 6, 111, 111, { 32, 29, 50, 27, 104, 0, 0, 0 } },
 };
 
 uint8_t baseLevel(const BattleMon *party, uint8_t count) {
@@ -133,14 +135,19 @@ void pickMovesSmart(BattleMon &m, const BattleMon *foes, uint8_t nFoes, bool mac
   for (int i = 0; i < 4; i++) monSetMove(m, i, i < k ? chosen[i] : 0);
 }
 
-void buildGymTeam(BattleSide &leader, uint8_t gym, const BattleSide &challenger, Rng &rng) {
-  const GymInfo &g = GYMS[gym];
-  uint8_t bl = baseLevel(challenger.party, challenger.count);
-  int top = bl + g.levelOffset;
+uint8_t gymBand(uint8_t bl) { return bl < 25 ? 0 : bl < 45 ? 1 : 2; }
+
+uint8_t gymAceLevel(uint8_t gym, uint8_t bl, int8_t pct) {
+  if (pct == GYM_PCT_TABLE) pct = GYMS[gym].levelPct[gymBand(bl)];
+  int top = (bl * (100 + pct) + 50) / 100;  // redondeado
   if (top > 100) top = 100;
-  uint8_t aceLv = (uint8_t)(top < 2 ? 2 : top);
-  uint8_t tier = aiTierForLevel(aceLv) + 1;
-  if (tier > 4) tier = 4;
+  return (uint8_t)(top < 2 ? 2 : top);
+}
+
+void buildGymTeam(BattleSide &leader, uint8_t gym, const BattleSide &challenger, Rng &rng, int8_t pct) {
+  const GymInfo &g = GYMS[gym];
+  uint8_t aceLv = gymAceLevel(gym, baseLevel(challenger.party, challenger.count), pct);
+  uint8_t tier = g.aiTier;
 
   // el resto del equipo: al azar del grupo, sin repetir
   uint8_t poolN = 0;
@@ -163,7 +170,8 @@ void buildGymTeam(BattleSide &leader, uint8_t gym, const BattleSide &challenger,
     uint8_t genes[5];
     for (int k = 0; k < 5; k++) genes[k] = (uint8_t)rng.range(105, 115);
     monInit(leader.party[i], sp, lv, genes);
-    if (tier >= 3) pickMovesSmart(leader.party[i], challenger.party, challenger.count, true);
+    // todos los lideres preparan cobertura contra tu equipo (con MT)
+    pickMovesSmart(leader.party[i], challenger.party, challenger.count, true);
   }
   leader.active = 0;
   leader.potions = tier >= 4 ? 2 : tier >= 3 ? 1 : 0;
