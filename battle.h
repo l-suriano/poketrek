@@ -127,6 +127,9 @@ void battleTurn(Battle &b, Action a0, Action a1);
 bool battleNeedsSwitch(const Battle &b, int s);
 void battleSwitchIn(Battle &b, int s, uint8_t idx);
 bool canUseMove(const Battle &b, int s, uint8_t slot);
+// al terminar: deshace Transformacion / Conversion / Mimetismo (el equipo sigue
+// con sus PS, PP y estados, como en una racha de la Liga)
+void battleEnd(Battle &b);
 
 // ---- IA ----
 // Nivel 1 al azar, 2 prefiere supereficaces, 3 ademas cambia, cura y usa estados,

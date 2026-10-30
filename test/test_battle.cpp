@@ -213,6 +213,36 @@ TEST(battle, equipo_de_gimnasio_escala_con_el_jugador) {
   for (int i = 0; i < 6; i++) CHECK(gio.party[i].moves[0] != 0);
 }
 
+TEST(battle, la_liga_tiene_su_equipo_y_blue_su_inicial) {
+  BattleSide me;
+  me.count = 6;
+  for (int i = 0; i < 6; i++) monInit(me.party[i], i == 0 ? CHARMANDER : SNORLAX, 50);
+  Rng rng;
+  for (int idx = 0; idx < NUM_ELITE; idx++) {
+    BattleSide opp;
+    buildEliteTeam(opp, (uint8_t)idx, me, rng);
+    CHECK_EQ((int)opp.count, (int)ELITE[idx].count);
+    CHECK_EQ((int)opp.aiTier, 4);
+    for (int i = 1; i < opp.count; i++) CHECK(opp.party[i].level >= opp.party[i - 1].level);  // el as al final
+  }
+  // tu primero es fuego: Blue saca la linea de Squirtle
+  BattleSide blue;
+  buildEliteTeam(blue, ELITE_CHAMPION, me, rng);
+  uint8_t starter = blue.party[blue.count - 1].species;
+  CHECK(starter == SQUIRTLE || starter == 8 || starter == 9);
+}
+
+TEST(battle, al_cerrar_la_batalla_se_deshace_la_transformacion) {
+  Battle b;
+  oneVsOne(b, 132, 40, SNORLAX, 40);  // Ditto
+  monSetMove(b.side[0].party[0], 0, 144);  // Transformacion
+  monSetMove(b.side[1].party[0], 0, M_SPLASH);
+  battleTurn(b, mv(0), mv(0));
+  CHECK_EQ((int)b.side[0].party[0].species, SNORLAX);
+  battleEnd(b);
+  CHECK_EQ((int)b.side[0].party[0].species, 132);
+}
+
 TEST(battle, batallas_completas_terminan_y_no_rompen_ps) {
   Rng pick;
   for (uint32_t seed = 1; seed <= 150; seed++) {

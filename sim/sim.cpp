@@ -4,7 +4,8 @@
 //
 //   ./sim [N]         tabla de % de victorias con los valores de gyms.cpp
 //   ./sim tune [N]    busca para cada lider el levelPct que deja al jugador
-//                     preparado en el objetivo (TARGET) y lo imprime
+//                     casual en su objetivo (casualTarget) y lo imprime
+//   ./sim tune-elite [N]  lo mismo para la Liga (ELITE_PCT, LEAGUE_TARGET)
 //
 // Dos perfiles de jugador:
 //   casual    6 Pokemon al azar, movimientos por defecto, IA nivel 2, 2 pociones
@@ -18,7 +19,8 @@
 
 static const uint8_t LEVELS[] = { 10, 15, 20, 25, 32, 40, 45, 52, 60 };
 #define NUM_LEVELS (int)(sizeof(LEVELS) / sizeof(LEVELS[0]))
-#define TARGET 42.5  // centro del 35-50 % de las reglas
+// objetivo del jugador CASUAL: rampa de 50 % (Brock) a 15 % (Giovanni)
+static double casualTarget(int gym) { return 50.0 - 5.0 * gym; }
 
 static bool isLegendary(uint8_t sp) { return sp == 144 || sp == 145 || sp == 146 || sp == 150 || sp == 151; }
 
@@ -52,7 +54,10 @@ static void makeMon(BattleMon &m, uint8_t base, uint8_t level, Rng &rng) {
   monInit(m, evolveForLevel(base, level), level, genes, sexp);
 }
 
+#define LEAGUE 0xFF  // "gym" especial: equipo para la Liga (sin un tipo al que apuntar)
+
 static void buildPlayer(BattleSide &p, uint8_t level, bool prepared, uint8_t gym, Rng &rng) {
+  bool league = gym == LEAGUE;
   p = BattleSide();
   p.count = 6;
   uint8_t used[6] = {0};
@@ -62,7 +67,10 @@ static void buildPlayer(BattleSide &p, uint8_t level, bool prepared, uint8_t gym
     do {
       sp = randomBase(rng);
       // el preparado lleva al menos 3 con ventaja de tipo (miramos la forma evolucionada)
-      if (prepared && i < 3 && !hasAdvantage(evolveForLevel(sp, level), GYMS[gym].type)) { dup = true; continue; }
+      if (prepared && !league && i < 3 && !hasAdvantage(evolveForLevel(sp, level), GYMS[gym].type)) {
+        dup = true;
+        continue;
+      }
       dup = false;
       for (int j = 0; j < i; j++) dup |= used[j] == sp;
     } while (dup);
@@ -70,15 +78,19 @@ static void buildPlayer(BattleSide &p, uint8_t level, bool prepared, uint8_t gym
     makeMon(p.party[i], sp, level, rng);
   }
   if (prepared) {
-    // cobertura pensada contra lo que suele sacar el lider: su tipo
-    BattleMon dummy;
-    monInit(dummy, GYMS[gym].ace, level);
-    dummy.type1 = GYMS[gym].type;
-    dummy.type2 = T_NONE;
-    for (int i = 0; i < 6; i++) pickMovesSmart(p.party[i], &dummy, 1, true);
+    // cobertura contra el tipo del lider, o contra los cinco tipos de la Liga
+    BattleMon dummies[NUM_ELITE];
+    uint8_t nd = league ? NUM_ELITE : 1;
+    for (int d = 0; d < nd; d++) {
+      monInit(dummies[d], 1, level);
+      dummies[d].type1 = league ? ELITE[d].type : GYMS[gym].type;
+      dummies[d].type2 = T_NONE;
+    }
+    for (int i = 0; i < 6; i++) pickMovesSmart(p.party[i], dummies, nd, true);
   }
   p.aiTier = prepared ? 4 : 2;
-  p.potions = prepared ? 5 : 2;
+  // para la Liga se va con la mochila llena
+  p.potions = league ? (prepared ? 10 : 5) : (prepared ? 5 : 2);
   p.potionHeal = potionForLevel(level);
 }
 
@@ -97,6 +109,113 @@ static bool fight(uint8_t gym, uint8_t level, bool prepared, uint32_t seed, int8
     battleTurn(b, battleAiChoose(b, 0), battleAiChoose(b, 1));
   }
   return b.outcome == OUT_WIN0;
+}
+
+// Entre combates de la Liga solo valen objetos (reglas): Revivir a los
+// debilitados (vuelven con media vida), Cura Total al que tenga estado y
+// pociones al que este por debajo de la mitad.
+struct LeagueBag { uint8_t revives, fullHeals; };
+
+static void healBetween(BattleSide &me, LeagueBag &bag) {
+  for (int i = 0; i < me.count; i++) {
+    BattleMon &m = me.party[i];
+    if (!m.hp && bag.revives) { bag.revives--; m.hp = m.maxHp / 2; m.status = STS_NONE; }
+    if (m.hp && m.status && bag.fullHeals) { bag.fullHeals--; m.status = STS_NONE; m.sleepTurns = 0; }
+  }
+  for (int i = 0; i < me.count; i++) {
+    BattleMon &m = me.party[i];
+    while (m.hp && m.hp * 2 < m.maxHp && me.potions) {
+      me.potions--;
+      uint32_t h = m.hp + me.potionHeal;
+      m.hp = (uint16_t)(h > m.maxHp ? m.maxHp : h);
+    }
+  }
+}
+
+// la Liga entera seguida: el equipo conserva PS, PP, estados y objetos entre
+// combates. Devuelve cuantos rivales gano (5 = Campeon).
+static int leagueRun(uint8_t level, bool prepared, uint32_t seed, int8_t pct) {
+  Rng rng;
+  rng.seed(seed * 2246822519u + level);
+  BattleSide me;
+  buildPlayer(me, level, prepared, LEAGUE, rng);
+  LeagueBag bag = { (uint8_t)(prepared ? 5 : 2), (uint8_t)(prepared ? 3 : 1) };
+  for (int idx = 0; idx < NUM_ELITE; idx++) {
+    if (idx) healBetween(me, bag);
+    Battle b;
+    b = Battle();
+    b.side[0] = me;
+    buildEliteTeam(b.side[1], (uint8_t)idx, me, rng, pct);
+    battleInit(b, rng.next(), false);
+    for (int turn = 0; turn < 1500 && !b.outcome; turn++) {
+      for (int s = 0; s < 2; s++)
+        if (battleNeedsSwitch(b, s)) battleSwitchIn(b, s, battleAiPickSwitch(b, s));
+      battleTurn(b, battleAiChoose(b, 0), battleAiChoose(b, 1));
+    }
+    if (b.outcome != OUT_WIN0) return idx;
+    battleEnd(b);
+    me = b.side[0];
+  }
+  return NUM_ELITE;
+}
+
+// % de corridas que llegan a ganar al rival `reach` (5 = Campeon)
+static double leagueRate(uint8_t level, bool prepared, int n, int8_t pct, int reach = NUM_ELITE) {
+  int ok = 0;
+  for (int i = 0; i < n; i++) ok += leagueRun(level, prepared, (uint32_t)i + 1, pct) >= reach;
+  return 100.0 * ok / n;
+}
+
+static double leagueBandRate(uint8_t band, bool prepared, int n, int8_t pct) {
+  double sum = 0;
+  int k = 0;
+  for (int l = 0; l < NUM_LEVELS; l++) {
+    if (gymBand(LEVELS[l]) != band) continue;
+    sum += leagueRate(LEVELS[l], prepared, n, pct);
+    k++;
+  }
+  return k ? sum / k : 0;
+}
+
+static void printLeague(int n, const int8_t *pct) {
+  printf("== LIGA: Alto Mando + Campeon seguidos (+%d/%d/%d %%, Campeon +%d %% extra) ==\n",
+         pct[0], pct[1], pct[2], CHAMPION_EXTRA_PCT);
+  printf("%-26s", "");
+  for (int l = 0; l < NUM_LEVELS; l++) printf("  Nv%-4d", LEVELS[l]);
+  printf("\n");
+  for (int prof = 0; prof < 2; prof++) {
+    bool prepared = prof == 1;
+    for (int reach = 4; reach <= NUM_ELITE; reach++) {
+      printf("%-10s %-15s", prepared ? "preparado" : "casual", reach == 4 ? "llega a Blue" : "es Campeon");
+      for (int l = 0; l < NUM_LEVELS; l++)
+        printf("  %4.0f%% ", leagueRate(LEVELS[l], prepared, n, pct[gymBand(LEVELS[l])], reach));
+      printf("\n");
+      fflush(stdout);
+    }
+  }
+  printf("\n");
+}
+
+// mismo metodo que tune(), pero la Liga es el final del juego: la referencia es
+// el jugador PREPARADO (con el casual, el Alto Mando tendria que ir ~40 % por
+// debajo de tu nivel). Un % por tramo para ser Campeon LEAGUE_TARGET % de las veces.
+#define LEAGUE_TARGET 50.0
+static void tuneLeague(int n) {
+  int8_t best[3];
+  printf("Buscando el +%% de nivel de la Liga para que el PREPARADO sea Campeon el %.0f %% de las veces...\n",
+         LEAGUE_TARGET);
+  for (uint8_t band = 0; band < 3; band++) {
+    int lo = -60, hi = 120;
+    while (hi - lo > 1) {
+      int mid = (lo + hi) / 2;
+      if (leagueBandRate(band, true, n, (int8_t)mid) > LEAGUE_TARGET) lo = mid;
+      else hi = mid;
+    }
+    double wl = leagueBandRate(band, true, n, (int8_t)lo), wh = leagueBandRate(band, true, n, (int8_t)hi);
+    best[band] = (int8_t)((wl - LEAGUE_TARGET) < (LEAGUE_TARGET - wh) ? lo : hi);
+  }
+  printf("  ELITE_PCT = { %d, %d, %d }\n\n", best[0], best[1], best[2]);
+  printLeague(n, best);
 }
 
 static double winRate(uint8_t gym, uint8_t level, bool prepared, int n, int8_t pct) {
@@ -144,20 +263,22 @@ static void printTable(int n, const int8_t (*pct)[3]) {
 // lider y por tramo; al final imprime las lineas para pegar en gyms.cpp
 static void tune(int n) {
   int8_t best[NUM_GYMS][3];
-  printf("Buscando el +%% de nivel que deja al jugador PREPARADO en %.1f %% en cada tramo...\n", TARGET);
+  printf("Buscando el +%% de nivel que deja al jugador CASUAL en su objetivo en cada tramo...\n");
   for (int g = 0; g < NUM_GYMS; g++) {
+    double target = casualTarget(g);
     for (uint8_t band = 0; band < 3; band++) {
-      int lo = -40, hi = 120;
+      int lo = -60, hi = 120;
       while (hi - lo > 1) {
         int mid = (lo + hi) / 2;
-        if (bandWinRate((uint8_t)g, band, true, n, (int8_t)mid) > TARGET) lo = mid;
+        if (bandWinRate((uint8_t)g, band, false, n, (int8_t)mid) > target) lo = mid;
         else hi = mid;
       }
-      double wl = bandWinRate((uint8_t)g, band, true, n, (int8_t)lo);
-      double wh = bandWinRate((uint8_t)g, band, true, n, (int8_t)hi);
-      best[g][band] = (int8_t)((wl - TARGET) < (TARGET - wh) ? lo : hi);
+      double wl = bandWinRate((uint8_t)g, band, false, n, (int8_t)lo);
+      double wh = bandWinRate((uint8_t)g, band, false, n, (int8_t)hi);
+      best[g][band] = (int8_t)((wl - target) < (target - wh) ? lo : hi);
     }
-    printf("  %-10s { %3d, %3d, %3d }\n", GYMS[g].leader, best[g][0], best[g][1], best[g][2]);
+    printf("  %-10s objetivo %2.0f%%  { %3d, %3d, %3d }\n", GYMS[g].leader, target,
+           best[g][0], best[g][1], best[g][2]);
     fflush(stdout);
   }
   printf("\n");
@@ -166,13 +287,25 @@ static void tune(int n) {
 
 int main(int argc, char **argv) {
   bool tuning = argc > 1 && strcmp(argv[1], "tune") == 0;
-  int argN = tuning ? 2 : 1;
+  bool tuningLeague = argc > 1 && strcmp(argv[1], "tune-elite") == 0;
+  bool league = argc > 2 && strcmp(argv[1], "league") == 0;  // ./sim league PCT [N]
+  int argN = (tuning || tuningLeague) ? 2 : league ? 3 : 1;
   int n = argc > argN ? atoi(argv[argN]) : 300;
   if (n < 1) n = 1;
-  printf("PokeTrek - %% de victorias del jugador contra cada gimnasio (%d batallas por casilla)\n", n);
+  printf("PokeTrek - %% de victorias del jugador (%d batallas o corridas por casilla)\n", n);
   printf("Jugador con los 6 Pokemon al nivel indicado (Base Level = ese nivel).\n");
-  printf("Objetivo de las reglas: 35-50 %% al primer intento con un equipo bien armado.\n\n");
+  printf("Objetivo: casual de 50 %% (Brock) a 15 %% (Giovanni); Campeon el %.0f %% de las veces.\n\n",
+         LEAGUE_TARGET);
   if (tuning) tune(n);
-  else printTable(n, nullptr);
+  else if (tuningLeague) tuneLeague(n);
+  else if (league) {
+    int8_t p = (int8_t)atoi(argv[2]);
+    int8_t pct[3] = { p, p, p };
+    printLeague(n, pct);
+  }
+  else {
+    printTable(n, nullptr);
+    printLeague(n, ELITE_PCT);
+  }
   return 0;
 }

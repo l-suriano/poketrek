@@ -155,6 +155,13 @@ void battleSwitchIn(Battle &b, int s, uint8_t idx) {
   emit(b, EV_SWITCH, s, idx);
 }
 
+void battleEnd(Battle &b) {
+  for (int s = 0; s < 2; s++) {
+    restoreSaved(b.side[s]);
+    b.side[s].vol = Volatile();
+  }
+}
+
 bool battleNeedsSwitch(const Battle &b, int s) {
   const BattleSide &sd = b.side[s];
   if (sd.party[sd.active].hp) return false;

@@ -48,3 +48,23 @@ void buildGymTeam(BattleSide &leader, uint8_t gym, const BattleSide &challenger,
 
 // curacion de una Pocion segun el nivel (Pocion, Superpocion, Hiperpocion, Max.)
 uint16_t potionForLevel(uint8_t level);
+
+// ---- Alto Mando (0..3) y Campeon (4) ----
+#define NUM_ELITE 5
+#define ELITE_CHAMPION 4
+#define CHAMPION_EXTRA_PCT 5  // el Campeon va un 5 % por encima del Alto Mando
+
+struct EliteInfo {
+  const char *name;
+  uint8_t type;
+  uint8_t count;
+  uint8_t team[6];  // formas base; el Campeon anade su inicial en el ultimo hueco
+};
+
+extern const EliteInfo ELITE[NUM_ELITE];
+extern const int8_t ELITE_PCT[3];
+
+// Monta al rival `idx` de la Liga contra el equipo del jugador (IA 4, cobertura).
+// El Campeon lleva el inicial que tiene ventaja contra el primero del jugador.
+void buildEliteTeam(BattleSide &opp, uint8_t idx, const BattleSide &challenger, Rng &rng,
+                    int8_t pct = GYM_PCT_TABLE);

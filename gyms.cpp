@@ -1,18 +1,33 @@
 #include "gyms.h"
 
 const GymInfo GYMS[NUM_GYMS] = {
-  // +% de nivel por tramo: afinados con `sim/sim tune` (ver sim/sim.cpp)
-  // Brock y Surge pedian hasta +99 %: con tope de +50 % quedan como los faciles del inicio
+  // +% de nivel por tramo: afinados con `sim/sim tune` (ver sim/sim.cpp) para que
+  // un jugador casual gane de 50 % (Brock) a 15 % (Giovanni) al primer intento
   // lider       tipo        km  +% <25 25-44 45+  IA eq  as   as alto  resto del equipo
-  { "Brock",     T_ROCK,      0, { 50, 50, 50 }, 2, 2,  95, 142, { 74, 111, 138, 140, 27, 104, 0, 0 } },
-  { "Misty",     T_WATER,     3, { 29, 26, 40 }, 2, 3, 120, 131, { 54, 116, 118, 90, 60, 72, 86, 0 } },
-  { "Lt. Surge", T_ELECTRIC,  8, { 50, 50, 50 }, 3, 3,  25, 133, { 100, 81, 125, 0, 0, 0, 0, 0 } },
-  { "Erika",     T_GRASS,    15, { 48, 30, 38 }, 3, 4,  43, 102, { 69, 114, 46, 1, 0, 0, 0, 0 } },
-  { "Koga",      T_POISON,   25, { 43, 22, 25 }, 3, 4, 109,  32, { 88, 23, 41, 48, 72, 29, 0, 0 } },
-  { "Sabrina",   T_PSYCHIC,  35, { -4, -2,  1 }, 4, 5,  63,  63, { 96, 122, 79, 124, 102, 0, 0, 0 } },
-  { "Blaine",    T_FIRE,     50, { 28, 22, 29 }, 4, 5,  58,   4, { 77, 37, 126, 133, 0, 0, 0, 0 } },
-  { "Giovanni",  T_GROUND,   65, { 25, 15, 24 }, 4, 6, 111, 111, { 32, 29, 50, 27, 104, 0, 0, 0 } },
+  { "Brock",     T_ROCK,      0, {  12,  30,  44 }, 2, 2,  95, 142, { 74, 111, 138, 140, 27, 104, 0, 0 } },
+  { "Misty",     T_WATER,     3, {   2,   3,   9 }, 2, 3, 120, 131, { 54, 116, 118, 90, 60, 72, 86, 0 } },
+  { "Lt. Surge", T_ELECTRIC,  8, {   2,   2,   7 }, 3, 3,  25, 133, { 100, 81, 125, 0, 0, 0, 0, 0 } },
+  { "Erika",     T_GRASS,    15, {  17,   7,  10 }, 3, 4,  43, 102, { 69, 114, 46, 1, 0, 0, 0, 0 } },
+  { "Koga",      T_POISON,   25, {  13,   7,  10 }, 3, 4, 109,  32, { 88, 23, 41, 48, 72, 29, 0, 0 } },
+  { "Sabrina",   T_PSYCHIC,  35, { -17, -10,  -7 }, 4, 5,  63,  63, { 96, 122, 79, 124, 102, 0, 0, 0 } },
+  { "Blaine",    T_FIRE,     50, {  -2,   2,  10 }, 4, 5,  58,   4, { 77, 37, 126, 133, 0, 0, 0, 0 } },
+  { "Giovanni",  T_GROUND,   65, {  -3,  -1,  10 }, 4, 6, 111, 111, { 32, 29, 50, 27, 104, 0, 0, 0 } },
 };
+
+// Alto Mando y Campeon de Rojo/Azul (formas base: evolucionan segun su nivel).
+// Se pelean seguidos y solo se cura con objetos entre combates.
+const EliteInfo ELITE[NUM_ELITE] = {
+  { "Lorelei",  T_ICE,      5, { 86, 90, 79, 124, 131, 0 } },   // Dewgong, Cloyster, Slowbro, Jynx, Lapras
+  { "Bruno",    T_FIGHTING, 5, { 95, 107, 106, 56, 66, 0 } },   // Onix, Hitmonchan, Hitmonlee, Primeape, Machamp
+  { "Agatha",   T_GHOST,    5, { 92, 41, 92, 23, 92, 0 } },     // Gengar, Golbat, Haunter, Arbok, Gengar
+  { "Lance",    T_DRAGON,   5, { 129, 147, 147, 142, 147, 0 } },// Gyarados, Dragonair x2, Aerodactyl, Dragonite
+  { "Blue",     T_NORMAL,   6, { 16, 63, 111, 102, 129, 0 } },  // + el inicial que gana al tuyo
+};
+
+// % de nivel del Alto Mando por tramo (afinado con `sim/sim tune-elite`): un
+// jugador preparado es Campeon ~50 % de las veces. Van algo por debajo de tu
+// nivel porque son cinco combates seguidos contra IA 4 con cobertura y genes altos.
+const int8_t ELITE_PCT[3] = { -12, -14, -17 };
 
 uint8_t baseLevel(const BattleMon *party, uint8_t count) {
   if (!count) return 1;
@@ -176,4 +191,39 @@ void buildGymTeam(BattleSide &leader, uint8_t gym, const BattleSide &challenger,
   leader.active = 0;
   leader.potions = tier >= 4 ? 2 : tier >= 3 ? 1 : 0;
   leader.potionHeal = potionForLevel(aceLv);
+}
+
+// el inicial de Blue: el que pega x2 al tipo principal de tu primer Pokemon
+static uint8_t rivalStarter(const BattleSide &challenger) {
+  static const uint8_t STARTERS[3] = { 1, 4, 7 };  // Bulbasaur, Charmander, Squirtle
+  uint8_t t = challenger.count ? challenger.party[0].type1 : (uint8_t)T_NORMAL;
+  for (int i = 0; i < 3; i++)
+    if (TYPE_EFF[BSPECIES[STARTERS[i]].type1][t] == 4) return STARTERS[i];
+  return 4;
+}
+
+void buildEliteTeam(BattleSide &opp, uint8_t idx, const BattleSide &challenger, Rng &rng, int8_t pct) {
+  const EliteInfo &e = ELITE[idx];
+  uint8_t bl = baseLevel(challenger.party, challenger.count);
+  if (pct == GYM_PCT_TABLE) pct = ELITE_PCT[gymBand(bl)];
+  if (idx == ELITE_CHAMPION) pct = (int8_t)(pct + CHAMPION_EXTRA_PCT);
+  int top = (bl * (100 + pct) + 50) / 100;
+  if (top > 100) top = 100;
+  if (top < 5) top = 5;
+
+  opp = BattleSide();
+  opp.aiTier = 4;
+  opp.count = e.count;
+  for (int i = 0; i < e.count; i++) {
+    // de menos a mas: el ultimo es el as
+    uint8_t lv = (uint8_t)(top - (e.count - 1 - i));
+    uint8_t base = (idx == ELITE_CHAMPION && i == e.count - 1) ? rivalStarter(challenger) : e.team[i];
+    uint8_t sp = evolveForLevel(base, lv, e.type);
+    uint8_t genes[5];
+    for (int k = 0; k < 5; k++) genes[k] = (uint8_t)rng.range(105, 115);
+    monInit(opp.party[i], sp, lv, genes);
+    pickMovesSmart(opp.party[i], challenger.party, challenger.count, true);
+  }
+  opp.potions = 2;
+  opp.potionHeal = potionForLevel((uint8_t)top);
 }
