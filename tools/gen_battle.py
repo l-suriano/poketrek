@@ -62,7 +62,6 @@ def dedupe(learn):
 def main():
     ailments = sorted({m['ailment'] for m in MOVES.values()} - {'none'})
     categories = sorted({m['category'] for m in MOVES.values()})
-    tix = {t: i for i, t in enumerate(TYPES)}
     machines = list(MACHINES)
 
     out = []

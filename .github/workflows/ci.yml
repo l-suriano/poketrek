@@ -10,7 +10,11 @@ jobs:
     name: Compile firmware
     runs-on: ubuntu-latest
     steps:
+      # arduino-cli exige que la carpeta se llame como el .ino; el repo del fork
+      # se llama poketrek, asi que se clona en TamaPoke/ hasta renombrar el sketch
       - uses: actions/checkout@v4
+        with:
+          path: TamaPoke
 
       - name: Install arduino-cli
         uses: arduino/setup-arduino-cli@v2
@@ -28,6 +32,7 @@ jobs:
         run: arduino-cli lib install "GFX Library for Arduino" SensorLib XPowersLib U8g2
 
       - name: Compile
+        working-directory: TamaPoke
         run: >
           arduino-cli compile --warnings=all
           --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB"
