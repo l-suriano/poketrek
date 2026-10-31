@@ -66,7 +66,7 @@ class HomeScreen {
     this.info = { gyms: g.gyms, km: g.km, leagueOpen: g.leagueOpen };
     this.goal = nextGoal(g);
     this.info.goalCity = this.goal.city;
-    checkPending(() => checkRival());
+    checkPending(() => { checkRival(); maybeAutoEvent(); });
   }
   // camara sobre el mundo: sigue a la ciudad elegida (o se queda donde estaba con MENU)
   camera(t) {
@@ -123,6 +123,7 @@ class HomeScreen {
     roundBox(0, 216, W, 66, BOX.light);
     const p = partner();
     if (p) drawMon(p.sp, 'front', 26, 262, t, { scale: Math.min(1.2, monScale(p.sp, p.hd, 'front', 26)) });
+    if (S.events + S.drops && Math.floor(t / 500) % 2) { roundBox(14, 214, 24, 22, BOX.light); textS('!', 26, 221, '#c03028', 'center'); }
     wrap(this.goal.text, 20).slice(0, 3).forEach((l, i) => text(l, 50, 224 + i * 11, INK));
     const menuOn = this.sel === CITIES.length;
     roundBox(W - 70, 258, 66, 20, menuOn ? BOX.sel : BOX.info);

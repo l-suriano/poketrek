@@ -124,6 +124,7 @@ function nextOutsideEvent() {
 }
 
 function handleEvent(e) {
+  Tele.track('event', e.kind, e.wild ? { sp: e.wild.sp, lv: e.wild.lv } : e.clsId !== undefined ? { cls: e.clsId } : null);
   if (e.kind === 'wild' || e.kind === 'legend' || e.kind === 'trainer') push(new EncounterScreen(e));
   else if (e.kind === 'item') message(L('foundItem', e.itemName, e.n));
   else if (e.kind === 'drop') showLoot(e.loot, L('supplyDrop'));
@@ -367,6 +368,7 @@ class ThrowScreen {
       if (p >= 1) {
         this.result = this.o.resolve(true, this.x10);
         refresh();
+        Tele.track('throw', this.result.res, { sp: this.o.sp, x10: this.x10, shakes: this.result.shakes });
         if (this.result.res === 'noball' || this.result.res === 'none') { this.phase = 'done'; this.o.done(this.result); return; }
         this.setPhase('shake', t);
       }
@@ -462,19 +464,9 @@ function drawBall(x, y, ball, spin, open) {
 // ----------------------------------------------------------------- equipo --
 
 // mode: menu | switch | target (objeto) | teach (MT)
+// equipo en tarjetas (PartyScreen, cards.js). mode: menu | swap | target | teach
 function partyScreen(mode, opts = {}) {
-  const build = () => {
-    refresh();
-    return S.party.map((m, i) => ({
-      label: m.name + (m.shiny ? ' ✦' : ''), right: 'Lv' + m.lv, icon: m.sp,
-      sub: `${m.hp}/${m.max}` + (m.st ? ' ' + STATUS_TXT[lang === LANG_ES ? 0 : 1][m.st] : ''),
-      hp: m.hp / m.max,
-      disabled: mode === 'teach' && !Engine.call('pt_can_learn_tm', opts.tm, i),
-      why: L('cantLearn'),
-      action: () => opts.pick ? opts.pick(i, m) : monMenu(i, m),
-    }));
-  };
-  return new ListScreen(opts.title || L('pokemon'), build(), { rowH: 26, refresh: build });
+  return new PartyScreen(Object.assign({ mode }, opts));
 }
 
 function monMenu(i, m) {
@@ -549,42 +541,7 @@ function boxScreen(startPage = 0) {
   return s;
 }
 
-class SummaryScreen {
-  constructor(inBox, idx) { this.m = inBox === 2 ? Engine.json('pt_box_mon', idx) : Engine.json('pt_mon', inBox, idx); }
-  draw(t) {
-    const m = this.m;
-    menuBg();
-    header(m.name + (m.shiny ? ' ✦' : ''), 'Lv' + m.lv);
-    // retrato sobre su fondo, como la ficha de los juegos
-    roundBox(3, 22, 94, 84, BOX.light);
-    ctx.save(); ctx.beginPath(); ctx.rect(6, 25, 88, 78); ctx.clip();
-    ctx.translate(6, 25); ctx.scale(88 / W, 78 / 176); drawBattleBg('grass', t, S.night, 176); ctx.restore();
-    platform(50, 96, 30, 6, 'grass', S.night);
-    drawMon(m.sp, 'front', 50, 96, t, { scale: monScale(m.sp, m.hd, 'front', 36) });
-    roundBox(99, 22, 138, 84, BOX.light);
-    let x = typeChip(m.t1, 106, 28);
-    if (m.t2 !== 255) typeChip(m.t2, 110 + x, 28);
-    textS(`HP ${m.hp}/${m.max}`, 106, 44);
-    bar(106, 54, 124, 4, m.hp / m.max);
-    statusChip(m.st, 204, 42);
-    textS(L('exp'), 106, 63, INK_DIM);
-    bar(136, 65, 94, 3, (m.exp - m.expLv) / Math.max(1, m.expNext - m.expLv), '#40a8f8');
-    textS(L('trust') + ' ' + m.trust, 106, 76);
-    bar(106, 88, 124, 3, m.trust / 100, '#c070d0');
-    roundBox(3, 108, W - 6, 32, BOX.light);
-    textS(L('stats'), 12, 114, INK_DIM);
-    textS([m.atk, m.def, m.spe, m.spc].map(v => String(v).padStart(3)).join(' '), 12, 126);
-    m.moves.forEach((mv, i) => {
-      const y = 142 + i * 34;
-      roundBox(3, y, W - 6, 32, BOX.light);
-      textS(mv.name, 11, y + 6);
-      typeChip(mv.type, 11, y + 17);
-      textS(`PP ${mv.pp}/${mv.max}`, W - 11, y + 6, INK, 'right');
-      if (mv.pow) textS(String(mv.pow), W - 11, y + 19, INK_DIM, 'right');
-    });
-  }
-  input(ev) { if (ev.k === 'back' || ev.k === 'ok' || ev.k === 'tap') pop(); }
-}
+// la ficha del Pokemon (SummaryScreen) esta en cards.js
 
 // ---------------------------------------------------------------- mochila --
 
@@ -611,11 +568,11 @@ function pocketScreen(pocket, title, opts) {
     refresh();
     if (pocket === 'tm') {
       return S.tms.map(tm => ({ label: (tm.num > 50 ? L('hm') + String(tm.num - 50).padStart(2, '0') : L('tm') + String(tm.num).padStart(2, '0')) + ' ' + tm.name,
-        right: tm.num > 50 ? '' : '×' + tm.n, action: () => teachFlow(tm) }));
+        right: tm.num > 50 ? '' : '×' + tm.n, desc: moveDesc(tm), action: () => teachFlow(tm) }));
     }
-    return S.bag.filter(b => b.pocket === pocket).map(b => ({ label: b.name, right: '×' + b.n, action: () => useFlow(b, opts) }));
+    return S.bag.filter(b => b.pocket === pocket).map(b => ({ label: b.name, right: '×' + b.n, desc: itemDesc(b.id), action: () => useFlow(b, opts) }));
   };
-  return new ListScreen(title, build(), { refresh: build });
+  return new ListScreen(title, build(), { refresh: build, descBox: true });
 }
 
 function useFlow(item, opts) {
@@ -665,13 +622,13 @@ function shopScreen(which, title) {
     if (which === 1 && !d.open) return [{ label: L('celadonClosed'), disabled: true }];
     const items = d.items.map(it => {
       if (which === 3) {
-        return { label: (it.tm ? it.label + ' ' : '') + it.name, right: it.bp + ' BP', action: () => {
+        return { label: (it.tm ? it.label + ' ' : '') + it.name, right: it.bp + ' BP', desc: it.tm ? '' : itemDesc(it.id), action: () => {
           const r = Engine.call('pt_buy', 3, it.idx, 1);
           saveSoon();
           message(r === 0 ? L('bought') : L('shopErr')[r]);
         } };
       }
-      return { label: it.name, right: money(it.price), sub: which === 2 ? '' : '', action: () => {
+      return { label: it.name, right: money(it.price), desc: itemDesc(it.id) + (it.have ? '  (' + L('have') + ' ' + it.have + ')' : ''), action: () => {
         const max = which === 2 ? it.have : Math.max(1, Math.min(99 - it.have, Math.floor(d.money / Math.max(1, it.price))));
         if (which !== 2 && d.money < it.price) { message(L('shopErr')[2]); return; }
         askNumber(L('howMany'), Math.max(1, max), n => money(n * it.price), n => {
@@ -690,7 +647,7 @@ function shopScreen(which, title) {
     }
     return items;
   };
-  return new ListScreen(title, build(), { refresh: build, right: () => which === 3 ? S.bp + ' BP' : money(S.money) });
+  return new ListScreen(title, build(), { refresh: build, descBox: true, right: () => which === 3 ? S.bp + ' BP' : money(S.money) });
 }
 
 // -------------------------------------------------------------- gimnasios --
@@ -846,10 +803,14 @@ function finishTour() {
 function dexScreen() {
   const d = Engine.call('pt_dex');
   const items = [];
+  const seen = [];
+  for (let i = 0; i < 151; i++) if (d[i] !== '0') seen.push(i + 1);
   for (let i = 0; i < 151; i++) {
     const st = d[i];
     items.push({ label: String(i + 1).padStart(3, '0') + ' ' + (st !== '0' ? JSON.parse(Engine.call('pt_species_name', i + 1)) : '----------'),
-      right: st === '2' ? '●' : st === '1' ? '○' : '', icon: st !== '0' ? i + 1 : 0, rightColor: '#e8503a' });
+      right: st === '2' ? '●' : st === '1' ? '○' : '', icon: st !== '0' ? i + 1 : 0, rightColor: '#e8503a',
+      disabled: st === '0', why: L('notSeen'),
+      action: () => push(new DexEntryScreen(i + 1, seen)) });
   }
   return new ListScreen(L('pokedex'), items, { rowH: 24, right: () => S.caught + '/151' });
 }
@@ -861,7 +822,10 @@ function settingsScreen() {
     { label: L('language'), right: lang === LANG_ES ? 'Español' : 'English', action: () => { setLang(lang === LANG_ES ? LANG_EN : LANG_ES); saveSoon(); topScreen().resume(); } },
     { label: L('renamePlayer'), right: profile.player, action: () => push(new KeyboardScreen(L('yourName'), profile.player, n => { profile.player = n; saveProfile(); })) },
     { label: L('renameRival'), right: profile.rival, action: () => push(new KeyboardScreen(L('rivalName'), profile.rival, n => { profile.rival = n; saveProfile(); })) },
+    { label: L('autoEvents'), right: prefs.autoEvents !== false ? L('on') : L('off'), action: () => { prefs.autoEvents = prefs.autoEvents === false; savePrefs(); topScreen().resume(); } },
     { label: L('testMode'), right: prefs.testMode ? L('on') : L('off'), action: () => { prefs.testMode = !prefs.testMode; savePrefs(); topScreen().resume(); } },
+    { label: L('telemetry'), right: prefs.telemetry !== false ? L('on') : L('off'), action: () => { prefs.telemetry = prefs.telemetry === false; savePrefs(); topScreen().resume(); } },
+    { label: L('errorLog'), right: errLog.length || '', action: () => push(errorLogScreen()) },
     { label: L('credits'), action: () => message(L('creditsText')) },
     { label: L('resetGame'), action: () => ask(L('resetQ'), [L('no'), L('yes')], k => {
       if (k === 1) { resetting = true; Promise.all([store.remove(SAVE_KEY), store.remove(PROFILE_KEY)]).then(() => location.reload()); }
@@ -870,6 +834,20 @@ function settingsScreen() {
   const s = new ListScreen(L('settings'), build(), { refresh: build });
   s.title = L('settings');
   return s;
+}
+
+// registro de errores guardado en el aparato (para revisar fallos en el R1)
+function errorLogScreen() {
+  const build = () => {
+    const items = errLog.slice().reverse().map(e => ({
+      label: e.t.slice(5, 16).replace('T', ' ') + ' ' + e.where, sub: e.msg,
+      action: () => message([e.where, e.msg, e.screens || '', e.trace || '']),
+    }));
+    if (errLog.length) items.push({ label: L('clearLog'), action: () => { errLog = []; try { localStorage.removeItem(ERRLOG_KEY); } catch (x) { /* nada */ } topScreen().resume(); } });
+    else items.push({ label: L('noErrors'), disabled: true });
+    return items;
+  };
+  return new ListScreen(L('errorLog'), build(), { rowH: 26, refresh: build });
 }
 
 // ------------------------------------------ aprender y evolucionar (cola) --

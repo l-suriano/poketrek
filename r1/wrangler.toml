@@ -1,0 +1,10 @@
+# Version del R1 en Cloudflare Pages, con la telemetria anonima en D1.
+#   npx wrangler pages deploy        (desde r1/)
+name = "ptk-r1-t8k2mi"
+pages_build_output_dir = "web"
+compatibility_date = "2026-10-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ptk-telemetry"
+database_id = "6edce24a-f929-4026-bffe-16ec7f5e07db"

@@ -54,8 +54,20 @@ adivinar, sin enlaces en ningún lado). Con HTTPS el service worker guarda todo
 la primera vez y después el R1 la abre sin internet.
 
 ```bash
-npx wrangler pages deploy r1/web --project-name <nombre-dificil-de-adivinar>
+cd r1 && npx wrangler pages deploy --branch main
 ```
+
+`r1/wrangler.toml` dice el proyecto (`ptk-r1-t8k2mi`), la carpeta (`web`) y la
+base D1 de la telemetria.
+
+## Telemetria anonima
+
+El juego manda errores y datos de uso (pantallas, combates, capturas) a
+`/api/t` (`r1/functions/api/t.js`), que los guarda en la base D1
+`ptk-telemetry` (`r1/schema.sql`). No van nombres ni datos personales: solo
+un identificador al azar del aparato. No hay forma publica de leerlos; se
+consultan desde la cuenta con `r1/tools/telemetry.ps1` (errores, pantallas,
+combates, hoy o una consulta SQL). El jugador lo apaga en Ajustes.
 
 Después se genera un QR con la dirección (por ejemplo con `qr/` del
 [creations-sdk](https://github.com/rabbit-hmi-oss/creations-sdk)) y se

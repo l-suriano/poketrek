@@ -7,7 +7,7 @@ const W = 240, H = 282;  // pantalla de una creation del R1
 // ------------------------------------------------------------------ motor ---
 
 // funciones del puente que devuelven texto (el resto devuelve numeros)
-const STR_FNS = new Set(['pt_state', 'pt_box', 'pt_box_page', 'pt_box_mon', 'pt_mon', 'pt_dex', 'pt_species_name', 'pt_walk', 'pt_next_event',
+const STR_FNS = new Set(['pt_state', 'pt_species', 'pt_box', 'pt_box_page', 'pt_box_mon', 'pt_mon', 'pt_dex', 'pt_species_name', 'pt_walk', 'pt_next_event',
   'pt_routes', 'pt_search', 'pt_encounter', 'pt_incense_tick', 'pt_throw', 'pt_battle_start', 'pt_battle_view',
   'pt_battle_act', 'pt_battle_end', 'pt_pending', 'pt_use_item', 'pt_shop', 'pt_gyms', 'pt_tour_info',
   'pt_tour_finish', 'pt_type_name', 'pt_save_b64']);
@@ -286,7 +286,7 @@ const input = { tilt: { x: 0, y: 0, z: 1, ok: false }, mouse: null, wheelUps: []
 
 function dispatch(ev) {
   const s = topScreen();
-  if (s && s.input) s.input(ev);
+  try { if (s && s.input) s.input(ev); } catch (e) { logError(e, 'input:' + (s && s.constructor ? s.constructor.name : '?') + ':' + ev.k); }
   needDraw = true;
 }
 
@@ -342,7 +342,12 @@ async function startSensors() {
 const stack = [];
 let needDraw = true;
 function topScreen() { return stack[stack.length - 1]; }
-function push(s) { stack.push(s); if (s.enter) s.enter(); needDraw = true; }
+function push(s) {
+  stack.push(s);
+  if (typeof Tele !== 'undefined') Tele.track('screen', screenName(s));
+  if (s.enter) s.enter();
+  needDraw = true;
+}
 function pop() { const s = stack.pop(); if (s && s.leave) s.leave(); const t = topScreen(); if (t && t.resume) t.resume(); needDraw = true; }
 function replace(s) { stack.pop(); push(s); }
 function home() { while (stack.length > 1) stack.pop(); const t = topScreen(); if (t && t.resume) t.resume(); needDraw = true; }
@@ -405,7 +410,7 @@ class ListScreen {
     return items.concat([{ label: '◀ ' + L('back'), isBack: true, action: () => pop() }]);
   }
   get y0() { return this.opts.y0 || 26; }
-  get visible() { return Math.floor((H - this.y0 - (this.opts.footer ? 18 : 6)) / this.rowH); }
+  get visible() { return Math.floor((H - this.y0 - (this.opts.footer ? 18 : this.opts.descBox ? 40 : 6)) / this.rowH); }
   resume() { if (this.opts.refresh) { this.items = this.withBack(this.opts.refresh()); this.sel = Math.min(this.sel, Math.max(0, this.items.length - 1)); } }
   draw(t) {
     menuBg();
@@ -437,6 +442,12 @@ class ListScreen {
     if (this.items.length > this.visible) {
       const h = rows * this.rowH;
       rect(W - 7, this.y0 + h * this.top / this.items.length, 2, Math.max(6, h * this.visible / this.items.length), '#8098b0');
+    }
+    if (this.opts.descBox) {
+      // descripcion del elegido, como la mochila del juego
+      const it = this.items[this.sel];
+      roundBox(3, H - 36, W - 6, 34, BOX.dark);
+      if (it && it.desc) wrap(it.desc, 26).slice(0, 2).forEach((l, i) => text(l, 10, H - 29 + i * 12, '#f8f8f8'));
     }
     if (this.opts.footer) {
       const f = typeof this.opts.footer === 'function' ? this.opts.footer() : this.opts.footer;
@@ -486,7 +497,7 @@ class MessageScreen {
     this.opts = opts;
   }
   draw(t) {
-    const under = stack[stack.length - 2];
+    const under = stack[stack.indexOf(this) - 1];  // la de debajo de esta (no de la de arriba)
     if (under && under !== this) under.draw(t);
     dialogBox(this.pages[this.page] || [], t, true);
   }
@@ -502,7 +513,7 @@ function ask(question, options, onPick) {
   const items = options.map((o, i) => ({ label: o, action: () => { pop(); onPick(i); } }));
   const s = new ListScreen('', items, { rowH: 18, noBack: true });
   s.draw = function (t) {
-    const under = stack[stack.length - 2];
+    const under = stack[stack.indexOf(this) - 1];  // la de debajo de esta (no de la de arriba)
     if (under && under !== this) under.draw(t);
     const y = dialogBox(wrap(question, 26).slice(0, 4), t, false);
     setFont(8);
@@ -535,7 +546,7 @@ function askNumber(title, max, unitPrice, onPick) {
   let n = 1;
   push({
     draw(t) {
-      const under = stack[stack.length - 2];
+      const under = stack[stack.indexOf(this) - 1];  // la de debajo de esta (no de la de arriba)
       if (under) under.draw(t);
       roundBox(30, 96, W - 60, 76, BOX.light);
       textS(title, W / 2, 106, INK, 'center');
@@ -562,16 +573,47 @@ function askNumber(title, max, unitPrice, onPick) {
 // ------------------------------------------------------------------ bucle ---
 
 let lastStateTick = 0;
+// un error al dibujar no puede congelar el juego: se anota y el ciclo sigue
 function loop(t) {
-  const s = topScreen();
-  if (s) {
-    ctx.setTransform(scale, 0, 0, scale, 0, 0);
-    s.draw(t);
-  }
-  // cada 5 s: pasos del acelerometro e incienso
-  if (t - lastStateTick > 5000) {
-    lastStateTick = t;
-    if (window.onSlowTick) window.onSlowTick();
-  }
   requestAnimationFrame(loop);
+  const s = topScreen();
+  try {
+    if (s) {
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+      s.draw(t);
+    }
+    // cada 5 s: pasos del acelerometro e incienso
+    if (t - lastStateTick > 5000) {
+      lastStateTick = t;
+      if (window.onSlowTick) window.onSlowTick();
+    }
+  } catch (e) {
+    logError(e, 'draw:' + (s && s.constructor ? s.constructor.name : '?'));
+  }
 }
+
+// --------------------------------------------------- registro de errores ---
+// Se guardan los ultimos errores en el aparato (Ajustes > Registro de errores).
+const ERRLOG_KEY = 'poketrek_errors';
+let errLog = [];
+let lastErr = '';
+function logError(e, where) {
+  const msg = (e && (e.message || e.reason || e)) + '';
+  const key = where + msg;
+  if (key === lastErr) return;  // el mismo error en cada cuadro: una sola vez
+  lastErr = key;
+  const trace = e && e.stack ? String(e.stack).split(/\n/).slice(0, 3).join(' | ') : '';
+  errLog.push({ t: new Date().toISOString(), where, msg, trace, screens: screensPath() });
+  if (errLog.length > 30) errLog = errLog.slice(-30);
+  try { localStorage.setItem(ERRLOG_KEY, JSON.stringify(errLog)); } catch (x) { /* sin almacenamiento */ }
+  try { console.error('[PokeTrek]', where, e); } catch (x) { /* nada */ }
+  if (typeof Tele !== 'undefined') Tele.track('error', where, { msg: msg.slice(0, 200), screens: screensPath(), trace: trace.slice(0, 300) });
+}
+function screensPath() {
+  try { return stack.map(s => s.constructor ? s.constructor.name : '?').join(' > '); } catch (x) { return ''; }
+}
+try { errLog = JSON.parse(localStorage.getItem(ERRLOG_KEY) || '[]'); } catch (e) { errLog = []; }
+window.addEventListener('error', ev => logError(ev.error || ev.message, 'window'));
+window.addEventListener('unhandledrejection', ev => logError(ev.reason, 'promise'));

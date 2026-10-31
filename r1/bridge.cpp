@@ -185,6 +185,7 @@ static void jmoves(const uint8_t *moves, const uint8_t *pp) {
     ji("pp", pp[k]);
     ji("max", MOVE_TBL[moves[k]].pp);
     ji("pow", MOVE_TBL[moves[k]].power);
+    ji("acc", MOVE_TBL[moves[k]].accuracy);
     jend('}');
   }
   jend(']');
@@ -201,6 +202,7 @@ static void jowned(const OwnedMon &m, bool full) {
   ji("t1", BSPECIES[m.species].type1);
   ji("t2", BSPECIES[m.species].type2);
   ji("hd", BSPECIES[m.species].heightDm);
+  ji("wt", BSPECIES[m.species].weightHg);
   jb("shiny", m.flags & OM_SHINY);
   jb("partner", m.flags & OM_PARTNER);
   ji("trust", m.trust);
@@ -472,7 +474,9 @@ API const char *pt_state() {
   jarr("tms");
   for (int i = 0; i < NUM_MACHINES; i++) {
     if (!TR.tms[i]) continue;
-    jobj(); ji("num", i + 1); ji("move", MACHINE_MOVE[i]); js("name", moveName(MACHINE_MOVE[i])); ji("n", TR.tms[i]); jend('}');
+    const MoveInfo &mi = MOVE_TBL[MACHINE_MOVE[i]];
+    jobj(); ji("num", i + 1); ji("move", MACHINE_MOVE[i]); js("name", moveName(MACHINE_MOVE[i])); ji("n", TR.tms[i]);
+    ji("type", mi.type); ji("pow", mi.power); ji("acc", mi.accuracy); jend('}');
   }
   jend(']');
   jarr("eggs");
@@ -561,6 +565,45 @@ API const char *pt_dex() {
   for (int s = 1; s <= 151; s++) d[s - 1] = dexHas(TR.caught, (uint8_t)s) ? '2' : dexHas(TR.seen, (uint8_t)s) ? '1' : '0';
   d[151] = 0;
   return d;
+}
+
+// ficha de la Pokedex: tipos, tamano, stats base, evoluciones y donde aparece
+API const char *pt_species(int sp) {
+  jreset();
+  if (sp < 1 || sp > 151) { jraw("null"); return jdone(); }
+  const BattleSpecies &b = BSPECIES[sp];
+  uint8_t base = (uint8_t)sp;
+  for (bool again = true; again; ) {
+    again = false;
+    for (int i = 0; i < NUM_EVOS; i++) if (EVO_TBL[i].to == base) { base = EVO_TBL[i].from; again = true; break; }
+  }
+  jobj();
+  ji("sp", sp);
+  js("name", dexName((int16_t)sp));
+  ji("t1", b.type1); ji("t2", b.type2);
+  ji("hd", b.heightDm); ji("wt", b.weightHg);
+  jarr("base"); jvi(b.hp); jvi(b.atk); jvi(b.def); jvi(b.spe); jvi(b.spc); jend(']');
+  ji("catch", b.captureRate);
+  ji("tier", WILD_TIER[base]);
+  jb("seen", dexHas(TR.seen, (uint8_t)sp));
+  jb("caught", dexHas(TR.caught, (uint8_t)sp));
+  jarr("routes");
+  for (int r = 0; r < NUM_ROUTES; r++)
+    for (int i = 0; i < ROUTE_POOL && ROUTES[r].pool[i].weight; i++)
+      if (ROUTES[r].pool[i].species == base) { jsep(); jtext(routeName((uint8_t)r)); break; }
+  jend(']');
+  jarr("evo");
+  for (int i = 0; i < NUM_EVOS; i++) {
+    const EvoEntry &e = EVO_TBL[i];
+    if (e.from != sp) continue;
+    jobj(); ji("to", e.to); js("name", dexName(e.to)); ji("method", e.method); ji("param", e.param);
+    if (e.method == EVO_STONE) js("item", itemName((uint8_t)(IT_FIRE_STONE + e.param)));  // Stone va en el mismo orden que las piedras
+    jend('}');
+  }
+  jend(']');
+  for (int i = 0; i < NUM_EVOS; i++) if (EVO_TBL[i].to == sp) { ji("from", EVO_TBL[i].from); js("fromName", dexName(EVO_TBL[i].from)); break; }
+  jend('}');
+  return jdone();
 }
 
 API const char *pt_species_name(int sp) {

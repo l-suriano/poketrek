@@ -175,10 +175,10 @@ class BattleScreen {
     const full = S.party.length >= 6 && S.boxCount >= 60;
     if (v.canThrow && !full) for (const id of BALLS) {
       const b = S.bag.find(x => x.id === id);
-      if (b) items.push({ label: b.name, right: '×' + b.n, action: () => { pop(); this.throwBall(id); } });
+      if (b) items.push({ label: b.name, right: '×' + b.n, desc: itemDesc(id), action: () => { pop(); this.throwBall(id); } });
     }
     for (const b of S.bag.filter(x => x.pocket === PK.MEDICINE)) {
-      items.push({ label: b.name, right: '×' + b.n, action: () => {
+      items.push({ label: b.name, right: '×' + b.n, desc: itemDesc(b.id), action: () => {
         if (v.itemsLeft <= 0) { message(L('noItemsLeft')); return; }
         pop();
         const party = this.v.me.party.map((m, i) => ({ label: m.name, right: 'Lv' + m.lv, icon: m.sp, sub: `${m.hp}/${m.max}`, hp: m.hp / m.max,
@@ -186,7 +186,7 @@ class BattleScreen {
         push(new ListScreen(L('onWhich'), party, { rowH: 26 }));
       } });
     }
-    push(new ListScreen(L('bag'), items, {}));
+    push(new ListScreen(L('bag'), items, { descBox: true }));
   }
 
   throwBall(ball) {
@@ -220,6 +220,7 @@ class BattleScreen {
     if (v.outcome === 9) this.say(L('caught', v.foe.mon.name), 1300);
     const r = Engine.json('pt_battle_end');
     saveSoon();
+    Tele.track('battle', v.kind, { out: v.outcome, turns: v.turn, foe: v.foe.mon.sp, lv: v.foe.mon.lv, me: this.disp[0].sp });
     if (r.money) this.say(L('gotMoney', r.money.toLocaleString('en-US')), 1100);
     if (r.badge) this.say(L('gotBadge', this.foeName), 1400);
     for (const tm of r.tms || []) this.say(L('gotTM', String(tm).padStart(2, '0')), 1100);
@@ -240,7 +241,9 @@ class BattleScreen {
   drawMonAt(i, x, y, side, t, k) {
     const m = this.disp[i];
     if (m.hidden || (m.faintT && t - m.faintT > 400)) return;
-    const enter = Math.min(1, (t - m.enterT) / 350);
+    // entre 0 y 1: con enterT en el futuro (entra tras el entrenador) daria un radio negativo
+    const enter = Math.max(0, Math.min(1, (t - m.enterT) / 350));
+    if (enter <= 0) return;
     let ox = 0, oy = 0;
     if (m.anim === 'Attack' && t - m.animT < 400) ox += Math.sin((t - m.animT) / 400 * Math.PI) * (i === 0 ? 10 : -10);
     if (m.faintT) oy = Math.min(1, (t - m.faintT) / 400) * 30;

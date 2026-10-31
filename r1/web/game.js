@@ -22,17 +22,20 @@ async function boot() {
   try { Object.assign(prefs, JSON.parse(await store.get(PREF_KEY) || '{}')); } catch (e) { /* por defecto */ }
   await loadProfile();
 
+  Tele.init();
   await Engine.load();
   Engine.call('pt_init', LANG_EN, nowSec(), (Math.random() * 0xFFFFFFFF) >>> 0);
   const saved = await store.get(SAVE_KEY);
   const loaded = saved && Engine.call('pt_load_b64', saved);
   startSensors();
+  Tele.track('boot', lang === LANG_ES ? 'es' : 'en', { save: !!loaded, w: innerWidth, h: innerHeight, r1: !!window.creationStorage });
 
   stack.length = 0;
   if (loaded) {
     lang = JSON.parse(Engine.call('pt_state')).lang === LANG_ES ? LANG_ES : LANG_EN;
     refresh();
     push(new HomeScreen());
+    telemetryNotice();
   } else {
     refresh();
     push(langScreen(() => push(new IntroScreen(() => push(new StarterScreen())))));
@@ -50,6 +53,7 @@ window.onSlowTick = () => {
     saveSoon();
   }
   const t = topScreen();
+  if (t instanceof HomeScreen && S.outside) { refresh(); maybeAutoEvent(); }
   // el incienso solo saca Pokemon en pantallas tranquilas (no en combate ni lanzando)
   if (pendingReload && t instanceof HomeScreen) { saveNow(); location.reload(); return; }
   // el incienso solo saca Pokemon en el inicio (no en dialogos, combates ni menus)
