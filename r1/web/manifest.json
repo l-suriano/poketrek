@@ -1,0 +1,9 @@
+{
+  "name": "PokéTrek",
+  "short_name": "PokéTrek",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#101420",
+  "theme_color": "#101420"
+}

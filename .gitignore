@@ -21,3 +21,7 @@ case/
 
 # simulador del PC
 sim/build/
+r1/build/
+r1/tools/cache/
+r1/web/poketrek.js
+r1/web/assets/
