@@ -11,7 +11,7 @@ BUILD := build
 
 CXX ?= g++
 EMCC ?= em++
-EXPORTS := $(shell grep '^API' bridge.cpp | grep -o 'pt_[a-z0-9_]*' | sort -u | sed 's/^/_/' | paste -sd, -)
+EXPORTS := $(shell grep '^API' bridge.cpp | grep -o 'pt_[a-z0-9_]*' | grep -v '^pt_dev_' | sort -u | sed 's/^/_/' | paste -sd, -)
 
 .PHONY: test web serve lib dev clean
 test: $(BUILD)/test_bridge

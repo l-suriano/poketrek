@@ -10,7 +10,7 @@ const W = 240, H = 282;  // pantalla de una creation del R1
 const STR_FNS = new Set(['pt_state', 'pt_species', 'pt_box', 'pt_box_page', 'pt_box_mon', 'pt_mon', 'pt_dex', 'pt_species_name', 'pt_walk', 'pt_next_event',
   'pt_routes', 'pt_search', 'pt_encounter', 'pt_incense_tick', 'pt_throw', 'pt_battle_start', 'pt_battle_view',
   'pt_battle_act', 'pt_battle_end', 'pt_pending', 'pt_use_item', 'pt_shop', 'pt_gyms', 'pt_tour_info',
-  'pt_tour_finish', 'pt_type_name', 'pt_save_b64']);
+  'pt_tour_finish', 'pt_type_name', 'pt_save_b64', 'pt_challenges']);
 
 const Engine = {
   mod: null,
@@ -315,8 +315,27 @@ function canvasPos(e) {
   const r = canvas.getBoundingClientRect();
   return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height };
 }
-canvas.addEventListener('pointerdown', e => { const p = canvasPos(e); input.mouse = p; dispatch({ k: 'tap', x: p.x, y: p.y }); });
-canvas.addEventListener('pointermove', e => { input.mouse = canvasPos(e); });
+// tocar = soltar sin moverse; si el dedo se mueve mas de 6 px es arrastrar (el mapa)
+let ptr = null;
+canvas.addEventListener('pointerdown', e => {
+  const p = canvasPos(e);
+  input.mouse = p;
+  ptr = { x: p.x, y: p.y, sx: p.x, sy: p.y, moved: false };
+  try { canvas.setPointerCapture(e.pointerId); } catch (x) { /* nada */ }
+});
+canvas.addEventListener('pointermove', e => {
+  const p = canvasPos(e);
+  input.mouse = p;
+  if (!ptr) return;
+  if (!ptr.moved && Math.hypot(p.x - ptr.sx, p.y - ptr.sy) > 6) ptr.moved = true;
+  if (ptr.moved) dispatch({ k: 'drag', dx: p.x - ptr.x, dy: p.y - ptr.y, x: p.x, y: p.y });
+  ptr.x = p.x; ptr.y = p.y;
+});
+canvas.addEventListener('pointerup', () => {
+  if (ptr && !ptr.moved) dispatch({ k: 'tap', x: ptr.sx, y: ptr.sy });
+  ptr = null;
+});
+canvas.addEventListener('pointercancel', () => { ptr = null; });
 
 // acelerometro del R1 (apuntar y contar pasos)
 const steps = { count: 0, last: 0, avg: 1, pending: 0, lastFlush: 0 };

@@ -95,7 +95,7 @@ static Ext XT;
 static Rng RNG;
 static uint32_t NOW = 1793000000u;
 
-enum BKind : uint8_t { BK_NONE, BK_WILD, BK_LEGEND, BK_TRAINER, BK_GYM, BK_ELITE, BK_TOUR, BK_RIVAL };
+enum BKind : uint8_t { BK_NONE, BK_WILD, BK_LEGEND, BK_TRAINER, BK_GYM, BK_ELITE, BK_TOUR, BK_RIVAL, BK_ROUTE };
 static Battle BT;
 static uint8_t bKind = BK_NONE;
 static uint8_t bGym, bAce, bLast;
@@ -105,12 +105,16 @@ static bool bFaintedAny, bCaught;
 static uint8_t bItemsUsed;
 static ExpBonus bBonus;
 static uint8_t bFoeActive;
+static int8_t bRoute = -1;          // reto del combate actual (-1 = ninguno)
+static uint8_t bRouteFoe, bRouteCls;
 
 static Encounter ENC;
 static bool encActive = false;
 static Tournament TOUR;
 static bool tourActive = false;
 static Loot LOOT;
+static Encounter encSaved;  // el encuentro que esperaba mientras se pelea con Snorlax
+static bool encSavedActive;
 
 // cosas que esperan al jugador tras un combate: aprender un movimiento o evolucionar
 enum PendKind : uint8_t { PD_LEARN, PD_EVOLVE };
@@ -171,6 +175,76 @@ static bool isNight() {
   uint32_t h = (NOW % 86400u) / 3600u;
   return h >= 20 || h < 6;
 }
+
+// ---------------------------------------------------------- retos de ruta --
+
+// Entre pueblo y pueblo hay un reto como en el original: varios entrenadores
+// que se pelean en orden y, en las rutas clave, un jefe (Team Rocket,
+// Giovanni, el rival o Snorlax). Un gimnasio pide superar los retos de antes.
+enum ChFoe : uint8_t { CF_TRAINER, CF_BOSS, CF_GIOVANNI, CF_RIVAL, CF_SNORLAX };
+struct ChFight { uint8_t foe, cls, size; };  // rival: size = etapa; Giovanni: tamano del equipo
+#define CH_FIGHTS 6
+struct Challenge {
+  const char *en, *es;
+  uint8_t city;  // pueblo del mapa (r1/web/kanto.js) donde se ofrece
+  uint8_t gate;  // gimnasio que abre (NUM_GYMS = la Liga)
+  uint8_t hard;  // niveles de mas de sus entrenadores
+  uint8_t n;
+  ChFight f[CH_FIGHTS];
+};
+#define NUM_CH 11
+#define SNORLAX 143
+static const Challenge CH[NUM_CH] = {
+  { "Route 1 & Viridian Forest", "Ruta 1 y Bosque Verde", 1, 0, 0, 3,
+    { {CF_TRAINER, 1, 1}, {CF_TRAINER, 1, 2}, {CF_TRAINER, 1, 2} } },
+  { "Mt. Moon", "Mt. Moon", 2, 1, 0, 5,
+    { {CF_TRAINER, 2, 2}, {CF_TRAINER, 0, 2}, {CF_TRAINER, 7, 2}, {CF_TRAINER, 3, 2}, {CF_BOSS, 8, 3} } },
+  { "Nugget Bridge", "Puente Pepita", 3, 2, 0, 6,
+    { {CF_TRAINER, 1, 2}, {CF_TRAINER, 2, 2}, {CF_TRAINER, 0, 2}, {CF_TRAINER, 2, 3}, {CF_TRAINER, 0, 3}, {CF_RIVAL, 0, 1} } },
+  { "S.S. Anne", "S.S. Anne", 6, 2, 0, 5,
+    { {CF_TRAINER, 13, 2}, {CF_TRAINER, 4, 2}, {CF_TRAINER, 2, 3}, {CF_TRAINER, 13, 3}, {CF_RIVAL, 0, 2} } },
+  { "Rock Tunnel", "T\243nel Roca", 3, 3, 0, 5,
+    { {CF_TRAINER, 3, 2}, {CF_TRAINER, 3, 2}, {CF_TRAINER, 3, 3}, {CF_TRAINER, 3, 3}, {CF_TRAINER, 3, 3} } },
+  { "Rocket Hideout", "Guarida Rocket", 5, 3, 1, 4,
+    { {CF_TRAINER, 8, 2}, {CF_TRAINER, 8, 3}, {CF_TRAINER, 8, 3}, {CF_GIOVANNI, 0, 3} } },
+  { "Pok\202mon Tower", "Torre Pok\202mon", 7, 3, 1, 3,
+    { {CF_TRAINER, 12, 2}, {CF_TRAINER, 12, 2}, {CF_TRAINER, 12, 3} } },
+  { "Route 12", "Ruta 12", 7, 4, 0, 1,
+    { {CF_SNORLAX, 0, 1} } },
+  { "Silph Co.", "Silph S.A.", 4, 5, 1, 5,
+    { {CF_TRAINER, 8, 3}, {CF_TRAINER, 7, 3}, {CF_TRAINER, 8, 3}, {CF_RIVAL, 0, 3}, {CF_GIOVANNI, 0, 4} } },
+  { "Sea Routes", "Rutas marinas", 8, 6, 1, 4,
+    { {CF_TRAINER, 5, 2}, {CF_TRAINER, 5, 3}, {CF_TRAINER, 5, 3}, {CF_TRAINER, 5, 3} } },
+  { "Victory Road", "Calle Victoria", 10, NUM_GYMS, 2, 5,
+    { {CF_TRAINER, 15, 3}, {CF_TRAINER, 11, 3}, {CF_TRAINER, 10, 3}, {CF_TRAINER, 14, 3}, {CF_TRAINER, 15, 3} } },
+};
+
+// combates ganados de cada reto (seccion PTX4 de la partida)
+struct Ext4 { uint8_t done[NUM_CH] = {}; };
+static Ext4 RT;
+
+static bool chCleared(int i) { return RT.done[i] >= CH[i].n; }
+// primera medalla que falta para el reto i (-1 = ninguna)
+static int chNeedBadge(int i) {
+  for (int g = 0; g < CH[i].gate && g < NUM_GYMS; g++) if (!(TR.badges & (1 << g))) return g;
+  return -1;
+}
+// abierto: el reto anterior superado y las medallas de antes de su gimnasio
+static bool chOpen(int i) { return (i == 0 || chCleared(i - 1)) && chNeedBadge(i) < 0; }
+// primer reto sin superar de los que pide el gimnasio g (NUM_GYMS = la Liga); -1 = todos
+static int chMissing(uint8_t g) {
+  for (int i = 0; i < NUM_CH; i++) if (CH[i].gate <= g && !chCleared(i)) return i;
+  return -1;
+}
+// partidas de antes de los retos: lo ya ganado da por superadas sus rutas
+static void chGrandfather() {
+  int top = -1;
+  for (int g = 0; g < NUM_GYMS; g++) if (TR.badges & (1 << g)) top = g;
+  if (TR.champion) top = NUM_GYMS;
+  for (int i = 0; i < NUM_CH; i++) if (CH[i].gate <= top) RT.done[i] = CH[i].n;
+}
+static const char *chName(int i) { return gLang == LANG_ES ? CH[i].es : CH[i].en; }
+static const char *className(uint8_t cls) { return gLang == LANG_ES ? TRAINER_CLASSES[cls].es : TRAINER_CLASSES[cls].en; }
 
 // ------------------------------------------------------------- serializar --
 
@@ -300,6 +374,7 @@ API void pt_new(int starter) {
   XT.started = true;
   XT.lastDay = dayIndex(NOW);
   EXTRA = Ext3();
+  RT = Ext4();
   OwnedMon m;
   ownedInit(m, (uint8_t)starter, 5, RNG);
   m.flags |= OM_PARTNER;
@@ -332,6 +407,7 @@ API int pt_save() {
   memcpy(x2.pq, PQ, sizeof(PQ));
   n = saveBlob("PTX2", 1, &x2, sizeof(x2), SAVEBUF + off + 4, sizeof(SAVEBUF) - off - 4); put32(SAVEBUF + off, (uint32_t)n); off += 4 + n;
   n = saveBlob("PTX3", 1, &EXTRA, sizeof(EXTRA), SAVEBUF + off + 4, sizeof(SAVEBUF) - off - 4); put32(SAVEBUF + off, (uint32_t)n); off += 4 + n;
+  n = saveBlob("PTX4", 1, &RT, sizeof(RT), SAVEBUF + off + 4, sizeof(SAVEBUF) - off - 4); put32(SAVEBUF + off, (uint32_t)n); off += 4 + n;
   return (int)off;
 }
 
@@ -353,6 +429,7 @@ API int pt_load(int len) {
   if (!(q = next(n)) || !progressLoad(p, q, n)) return 0;
   if (!(q = next(n)) || !loadBlob("PTX1", 1, &x, sizeof(x), q, n)) return 0;
   TR = t; EX = e; PG = p; XT = x;
+  bRoute = -1;
   gLang = (Lang)XT.lang;
   encActive = false;
   bKind = BK_NONE;
@@ -367,6 +444,10 @@ API int pt_load(int len) {
   EXTRA = Ext3();
   static Ext3 x3;
   if ((q = next(n)) && loadBlob("PTX3", 1, &x3, sizeof(x3), q, n) && x3.count <= EXTRA_MAX) EXTRA = x3;
+  RT = Ext4();
+  Ext4 x4;
+  if ((q = next(n)) && loadBlob("PTX4", 1, &x4, sizeof(x4), q, n)) RT = x4;
+  chGrandfather();
   return 1;
 }
 
@@ -425,9 +506,12 @@ API void pt_set_outside(int on) { XT.outside = on != 0; }
 static bool gymOpen(uint8_t g) {
   if (g >= NUM_GYMS) return false;
   if (g > 0 && !(TR.badges & (1 << (g - 1)))) return false;
+  if (chMissing(g) >= 0) return false;
   return EX.meters / 1000 >= GYMS[g].kmToUnlock;
 }
-static bool leagueOpen() { return badgeCount(TR) == NUM_BADGES && EX.meters / 1000 >= 80; }
+static bool leagueOpen() {
+  return badgeCount(TR) == NUM_BADGES && chMissing(NUM_GYMS) < 0 && EX.meters / 1000 >= 80;
+}
 
 API const char *pt_state() {
   jreset();
@@ -804,8 +888,59 @@ static void startCommon(uint8_t kind) {
 
 static void jview();
 
+// deja en f los n mas fuertes de full (el as va al final)
+static void keepStrongest(BattleSide &f, const BattleSide &full, uint8_t n) {
+  f = full;
+  if (n > full.count) n = full.count;
+  for (int i = 0; i < n; i++) f.party[i] = full.party[full.count - n + i];
+  f.count = n;
+}
+
+// rival (Blue) en los retos clave: etapa 0..4. Su equipo crece de 2 a 6 y lleva
+// el inicial que gana al tuyo, como en el original.
+static void buildRival(BattleSide &f, uint8_t stage) {
+  static const uint8_t SIZE[5] = { 2, 3, 4, 5, 6 };
+  static const int8_t PCT[5] = { -5, -6, -8, -10, -12 };  // afinar con sim/sim
+  static const uint8_t AI[5] = { 2, 3, 3, 4, 4 };
+  if (stage > 4) stage = 4;
+  BattleSide full;
+  buildEliteTeam(full, ELITE_CHAMPION, BT.side[0], RNG, (int8_t)(PCT[stage] - CHAMPION_EXTRA_PCT));
+  keepStrongest(f, full, SIZE[stage]);
+  f.aiTier = AI[stage];
+  f.potions = stage < 2 ? 1 : 2;
+  bPrize = prizeMoney(35, f.party[f.count - 1].level);
+}
+
+static uint8_t clampLv(int v) { return (uint8_t)(v < 2 ? 2 : v > 100 ? 100 : v); }
+
+// entrenador de un reto: como los de ruta (escala con tu equipo) con su clase y
+// tamano fijos; el jefe va un poco mas fuerte, piensa mejor y lleva una cura
+static void buildChTrainer(BattleSide &f, const ChFight &cf, uint8_t hard, uint8_t bl) {
+  const TrainerClass &c = TRAINER_CLASSES[cf.cls];
+  uint8_t poolN = 0;
+  while (poolN < 6 && c.pool[poolN]) poolN++;
+  bool boss = cf.foe == CF_BOSS;
+  int lo = bl - 3 + hard + (boss ? 2 : 0), hi = bl + 1 + hard + (boss ? 1 : 0);
+  uint8_t n = cf.size < PARTY_MAX ? cf.size : PARTY_MAX;
+  uint8_t lv[PARTY_MAX];
+  for (int i = 0; i < n; i++) lv[i] = clampLv(RNG.range(lo, hi));
+  for (int i = 1; i < n; i++)  // de menor a mayor: el ultimo es el mas fuerte
+    for (int j = i; j > 0 && lv[j] < lv[j - 1]; j--) { uint8_t x = lv[j]; lv[j] = lv[j - 1]; lv[j - 1] = x; }
+  f = BattleSide();
+  for (int i = 0; i < n; i++) {
+    uint8_t genes[5];
+    for (int k = 0; k < 5; k++) genes[k] = (uint8_t)RNG.range(90, 110);
+    monInit(f.party[i], evolveForLevel(c.pool[RNG.range(0, poolN - 1)], lv[i]), lv[i], genes);
+  }
+  f.count = n;
+  uint8_t ai = aiTierForLevel(lv[n - 1]) + (boss || hard ? 1 : 0);
+  f.aiTier = ai > 4 ? 4 : ai;
+  f.potions = boss ? 1 : 0;
+  bPrize = prizeMoney(c.prizeBase, lv[n - 1]) * (boss ? 2 : 1);
+}
+
 // kind: 1 encuentro actual (salvaje, legendario o entrenador), 2 gimnasio arg,
-// 3 siguiente rival de la Liga, 4 ronda del torneo
+// 3 siguiente rival de la Liga, 4 ronda del torneo, 6 siguiente combate del reto arg
 API const char *pt_battle_start(int kind, int arg) {
   jreset();
   BT = Battle();
@@ -849,27 +984,48 @@ API const char *pt_battle_start(int kind, int arg) {
     buildEliteTeam(BT.side[1], XT.leagueIdx, BT.side[0], RNG);
     bBonus = { true, !(PG.eliteBeaten & (1 << XT.leagueIdx)), false, false };
     startCommon(BK_ELITE);
-  } else if (kind == 5) {
-    // rival (Blue) en los momentos clave del viaje: arg = etapa 0..4. Su equipo crece
-    // de 2 a 6 y lleva el inicial que gana al tuyo, como en el original.
-    static const uint8_t SIZE[5] = { 2, 3, 4, 5, 6 };
-    static const int8_t PCT[5] = { -5, -6, -8, -10, -12 };  // afinar con sim/sim
-    static const uint8_t AI[5] = { 2, 3, 3, 4, 4 };
+  } else if (kind == 6) {
+    // siguiente combate del reto de ruta arg
     if (!anyAlive(TR)) { jraw("{\"error\":\"fainted\"}"); return jdone(); }
-    if (arg < 0 || arg > 4) { jraw("{\"error\":1}"); return jdone(); }
+    if (arg < 0 || arg >= NUM_CH || !chOpen(arg) || chCleared(arg)) { jraw("{\"error\":1}"); return jdone(); }
+    const ChFight &cf = CH[arg].f[RT.done[arg]];
     buildPlayerSide();
-    BattleSide full;
-    buildEliteTeam(full, ELITE_CHAMPION, BT.side[0], RNG, (int8_t)(PCT[arg] - CHAMPION_EXTRA_PCT));
     BattleSide &f = BT.side[1];
-    f = full;
-    uint8_t n = SIZE[arg] < full.count ? SIZE[arg] : full.count;
-    for (int i = 0; i < n; i++) f.party[i] = full.party[full.count - n + i];  // los mas fuertes y el inicial
-    f.count = n;
-    f.aiTier = AI[arg];
-    f.potions = arg < 2 ? 1 : 2;
-    bPrize = prizeMoney(35, f.party[n - 1].level);
+    uint8_t bl = baseLevel(BT.side[0].party, BT.side[0].count);
     bBonus = { true, false, false, false };
-    startCommon(BK_RIVAL);
+    if (cf.foe == CF_SNORLAX) {
+      // Snorlax dormido corta el paso: se despierta con la Poke Flauta y se puede atrapar
+      encSaved = ENC; encSavedActive = encActive;
+      ENC = Encounter();
+      ENC.kind = EN_WILD;
+      exploreWild(ENC.wild, SNORLAX, clampLv(bl + 4), RNG);
+      encActive = true;
+      BT.wild = true;
+      f = BattleSide();
+      f.party[0] = ENC.wild;
+      f.count = 1;
+      f.aiTier = 2;
+      bBonus = { false, false, false, false };
+      startCommon(BK_WILD);
+    } else if (cf.foe == CF_RIVAL) {
+      buildRival(f, cf.size);
+      startCommon(BK_RIVAL);
+    } else if (cf.foe == CF_GIOVANNI) {
+      // el lider de Verde como jefe Rocket: su equipo de gimnasio, mas corto y algo mas bajo
+      BattleSide full;
+      buildGymTeam(full, 7, BT.side[0], RNG, (int8_t)(GYMS[7].levelPct[gymBand(bl)] - (cf.size < 4 ? 8 : 4)));
+      keepStrongest(f, full, cf.size);
+      f.potions = 1;
+      bPrize = prizeMoney(99, f.party[f.count - 1].level);
+      startCommon(BK_ROUTE);
+    } else {
+      buildChTrainer(f, cf, CH[arg].hard, bl);
+      startCommon(BK_ROUTE);
+    }
+    for (int i = 0; i < f.count; i++) dexMark(TR.seen, f.party[i].species);
+    bRoute = (int8_t)arg;
+    bRouteFoe = cf.foe;
+    bRouteCls = cf.cls;
   } else if (kind == 4) {
     if (!tourActive || tourOver(TOUR)) { jraw("{\"error\":1}"); return jdone(); }
     bKind = BK_TOUR;  // ownedFor mira las inscripciones
@@ -889,7 +1045,7 @@ static bool canThrow() { return bKind == BK_WILD || bKind == BK_LEGEND; }
 
 static void jview() {
   jobj();
-  static const char *KIND[] = { "none", "wild", "legend", "trainer", "gym", "elite", "tour", "rival" };
+  static const char *KIND[] = { "none", "wild", "legend", "trainer", "gym", "elite", "tour", "rival", "route" };
   js("kind", KIND[bKind]);
   ji("turn", BT.turn);
   ji("outcome", bCaught ? 9 : BT.outcome);
@@ -900,18 +1056,21 @@ static void jview() {
   if (bKind == BK_GYM) js("foeName", GYMS[bGym].leader);
   else if (bKind == BK_ELITE) js("foeName", ELITE[XT.leagueIdx].name);
   else if (bKind == BK_RIVAL) js("foeName", ELITE[ELITE_CHAMPION].name);
-  else if (bKind == BK_TRAINER) js("foeName", gLang == LANG_ES ? TRAINER_CLASSES[ENC.trainer.cls].es : TRAINER_CLASSES[ENC.trainer.cls].en);
+  else if (bKind == BK_TRAINER) js("foeName", className(ENC.trainer.cls));
+  else if (bKind == BK_ROUTE) js("foeName", bRouteFoe == CF_GIOVANNI ? GYMS[7].leader : className(bRouteCls));
   else if (bKind == BK_TOUR) {
     TourRival r = tourRival(TOUR);
     js("foeName", r.special == SPC_GYM ? GYMS[r.idx].leader : r.special != SPC_NONE ? ELITE[r.idx].name
                   : (gLang == LANG_ES ? TRAINER_CLASSES[r.idx].es : TRAINER_CLASSES[r.idx].en));
   }
   if (canThrow()) jb("shiny", ENC.shiny);
+  if (bRoute >= 0) { ji("route", bRoute); jb("boss", bRouteFoe != CF_TRAINER); }
   // quien es el rival, para su sprite: clase de entrenador, lider o miembro de la Liga
   if (bKind == BK_TRAINER) ji("tclass", ENC.trainer.cls);
   else if (bKind == BK_GYM) ji("tgym", bGym);
   else if (bKind == BK_ELITE) ji("telite", XT.leagueIdx);
   else if (bKind == BK_RIVAL) ji("telite", ELITE_CHAMPION);
+  else if (bKind == BK_ROUTE) { if (bRouteFoe == CF_GIOVANNI) ji("tgym", 7); else ji("tclass", bRouteCls); }
   else if (bKind == BK_TOUR) {
     TourRival r = tourRival(TOUR);
     if (r.special == SPC_GYM) ji("tgym", r.idx);
@@ -1168,7 +1327,7 @@ API const char *pt_battle_end() {
   } else if (bKind == BK_WILD || bKind == BK_LEGEND) {
     if (bKind == BK_LEGEND) exploreLegendResult(EX, ENC.legend, false, NOW);
     encActive = false;
-  } else if (bKind == BK_TRAINER || bKind == BK_RIVAL) {
+  } else if (bKind == BK_TRAINER || bKind == BK_RIVAL || bKind == BK_ROUTE) {
     if (won) money = cleanWinBonus(bPrize, noneFainted, partnerInParty(TR));
     if (bKind == BK_TRAINER) encActive = false;
   } else if (bKind == BK_GYM && won) {
@@ -1200,13 +1359,24 @@ API const char *pt_battle_end() {
   if (money) { earn(TR, money); ji("money", money); }
   if (lost && bKind != BK_TOUR) {
     // fuera de combate: al Centro Pokemon; con salvajes y entrenadores se pierde el 10 %
-    if (bKind == BK_WILD || bKind == BK_LEGEND || bKind == BK_TRAINER || bKind == BK_RIVAL) {
+    if (bKind == BK_WILD || bKind == BK_LEGEND || bKind == BK_TRAINER || bKind == BK_RIVAL || bKind == BK_ROUTE) {
       uint32_t before = TR.money;
       blackout(TR);
       ji("lostMoney", before - TR.money);
     }
     healAll(TR);
     jb("blackout", true);
+  }
+  if (bRoute >= 0) {
+    // reto: ganar (o atrapar a Snorlax) cuenta; perder o huir deja el combate para otra vez
+    if (won || bCaught) {
+      RT.done[bRoute]++;
+      ji("route", bRoute);
+      ji("routeDone", RT.done[bRoute]);
+      jb("routeCleared", chCleared(bRoute));
+    }
+    if (bRouteFoe == CF_SNORLAX) { ENC = encSaved; encActive = encSavedActive; }
+    bRoute = -1;
   }
   ji("pending", nPend);
   jend('}');
@@ -1441,12 +1611,14 @@ API const char *pt_gyms() {
     ji("type", GYMS[g].type);
     ji("km", GYMS[g].kmToUnlock);
     jb("open", gymOpen((uint8_t)g));
+    ji("route", chMissing((uint8_t)g));  // primer reto que falta (-1 = ninguno)
     jb("badge", TR.badges & (1 << g));
     ji("size", GYMS[g].teamSize);
     jend('}');
   }
   jend(']');
   jb("leagueOpen", leagueOpen());
+  ji("leagueRoute", chMissing(NUM_GYMS));
   jb("leagueActive", XT.leagueActive);
   ji("leagueIdx", XT.leagueIdx);
   jarr("elite");
@@ -1457,6 +1629,49 @@ API const char *pt_gyms() {
 }
 
 API void pt_league_quit() { XT.leagueActive = false; XT.leagueIdx = 0; }
+
+#ifndef __EMSCRIPTEN__
+// solo en nativo (pruebas y dev_server): dar medallas y lo que ya superaron
+API void pt_dev_badges(int mask) { TR.badges = (uint8_t)mask; chGrandfather(); }
+API void pt_dev_route(int ch, int done) { if (ch >= 0 && ch < NUM_CH) RT.done[ch] = (uint8_t)done; }
+#endif
+
+// retos de ruta: progreso, si estan abiertos y quien es el siguiente rival
+API const char *pt_challenges() {
+  jreset();
+  jobj();
+  jarr("list");
+  for (int i = 0; i < NUM_CH; i++) {
+    const Challenge &c = CH[i];
+    jobj();
+    ji("id", i);
+    js("name", chName(i));
+    ji("city", c.city);
+    ji("gate", c.gate);
+    ji("n", c.n);
+    ji("done", RT.done[i] < c.n ? RT.done[i] : c.n);
+    jb("cleared", chCleared(i));
+    jb("open", chOpen(i));
+    ji("needBadge", chNeedBadge(i));
+    jb("needPrev", i > 0 && !chCleared(i - 1));
+    jb("boss", c.f[c.n - 1].foe != CF_TRAINER);
+    if (!chCleared(i)) {
+      const ChFight &f = c.f[RT.done[i]];
+      static const char *FOE[] = { "trainer", "boss", "giovanni", "rival", "snorlax" };
+      jobj("next");
+      js("foe", FOE[f.foe]);
+      if (f.foe == CF_TRAINER || f.foe == CF_BOSS) { js("name", className(f.cls)); ji("cls", f.cls); ji("size", f.size); }
+      else if (f.foe == CF_GIOVANNI) { js("name", GYMS[7].leader); ji("size", f.size); }
+      else if (f.foe == CF_RIVAL) ji("size", f.size + 2);
+      else { js("name", dexName(SNORLAX)); ji("sp", SNORLAX); }
+      jend('}');
+    }
+    jend('}');
+  }
+  jend(']');
+  jend('}');
+  return jdone();
+}
 
 // ---------------------------------------------------------------- torneos --
 

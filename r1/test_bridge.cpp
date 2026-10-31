@@ -33,6 +33,9 @@ const char *pt_use_item(int, int);
 const char *pt_shop(int);
 int pt_buy(int, int, int);
 const char *pt_gyms();
+const char *pt_challenges();
+void pt_dev_badges(int);
+void pt_dev_route(int, int);
 const char *pt_tour_info();
 int pt_tour_enter(int, int, int, int, int);
 int pt_daily_enter(int, int, int);
@@ -137,6 +140,21 @@ int main(int argc, char **argv) {
   printf("combates %d, lanzamientos %d, entrenadores %d\n", battles, catches, trainers);
   check(battles > 5, "hubo combates");
 
+  // retos de ruta: Brock pide la Ruta 1 y el Bosque Verde (3 combates en orden)
+  out("challenges", pt_challenges());
+  check(strstr(pt_gyms(), "\"route\":0") != nullptr, "Brock pide el reto 0");
+  check(strstr(pt_battle_start(6, 1), "\"error\"") != nullptr, "Mt. Moon cerrado sin medalla");
+  for (int t = 0; t < 40 && !strstr(pt_challenges(), "\"cleared\":true"); t++) {
+    pt_heal(1);
+    const char *s = pt_battle_start(6, 0);
+    out("routestart", s);
+    if (strstr(s, "\"error\"")) break;
+    playBattle(rng);
+  }
+  check(strstr(pt_challenges(), "\"cleared\":true") != nullptr, "reto 0 superado");
+  check(strstr(pt_battle_start(6, 0), "\"error\"") != nullptr, "reto superado no se repite");
+  check(strstr(pt_gyms(), "\"route\":-1") != nullptr, "Brock ya no pide reto");
+
   // gimnasio de Brock
   out("gyms", pt_gyms());
   pt_heal(1);
@@ -177,6 +195,30 @@ int main(int argc, char **argv) {
     out("dailyend", pt_tour_finish());
   }
 
+  // jefes: Snorlax (con 4 medallas) y Silph S.A. (rival y Giovanni, con 5)
+  pt_dev_badges(0x0F);
+  pt_heal(1);
+  const char *sn = pt_battle_start(6, 7);
+  out("snorlax", sn);
+  check(strstr(sn, "\"kind\":\"wild\"") && strstr(sn, "\"route\":7"), "Snorlax salvaje del reto 7");
+  playBattle(rng);
+  pt_dev_badges(0x1F);
+  pt_heal(1);
+  out("silph", pt_battle_start(6, 8));
+  playBattle(rng);
+  pt_dev_route(8, 3);
+  pt_heal(1);
+  const char *rv = pt_battle_start(6, 8);
+  out("rival", rv);
+  check(strstr(rv, "\"kind\":\"rival\"") && strstr(rv, "\"boss\":true"), "rival en Silph");
+  playBattle(rng);
+  pt_dev_route(8, 4);
+  pt_heal(1);
+  const char *gv = pt_battle_start(6, 8);
+  out("giovanni", gv);
+  check(strstr(gv, "\"tgym\":7") && strstr(gv, "\"foeName\":\"Giovanni\"") && strstr(gv, "\"count\":4"), "Giovanni en Silph con 4");
+  playBattle(rng);
+
   // guardar y cargar
   char before[8192];
   snprintf(before, sizeof(before), "%s", pt_state());
@@ -185,6 +227,7 @@ int main(int argc, char **argv) {
   pt_new(1);
   check(pt_load(n) == 1, "cargar");
   check(strcmp(before, pt_state()) == 0, "estado igual tras cargar");
+  check(strstr(pt_challenges(), "\"cleared\":true") != nullptr, "retos guardados");
   pt_buf()[40] ^= 0x55;
   check(pt_load(n) == 0, "guardado corrupto rechazado");
   out("final", pt_state());

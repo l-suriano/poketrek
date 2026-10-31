@@ -27,6 +27,72 @@ const SEA_PATHS = [[8, 9], [9, 0]];
 
 function cityName(c) { return lang === LANG_ES ? c.es : c.en; }
 
+// ------------------------------------------------------------ retos de ruta -
+// Entre pueblo y pueblo hay un reto (pt_challenges): entrenadores en orden y,
+// en los clave, un jefe. El gimnasio siguiente pide superarlo.
+
+// fondo del combate de cada reto (mismo orden que CH en bridge.cpp)
+const CH_BG = ['forest', 'cave', 'grass', 'water', 'cave', 'gym', 'gym', 'grass', 'gym', 'water', 'cave'];
+
+// quien es el siguiente rival de un reto, en corto
+function chFoeText(nx) {
+  if (!nx) return '';
+  if (nx.foe === 'rival') return profile.rival;
+  if (nx.foe === 'snorlax') return nx.name;
+  if (nx.foe === 'giovanni') return nx.name + ' ★';
+  return nx.name + (nx.foe === 'boss' ? ' ★' : '');
+}
+
+// por que un reto sigue cerrado
+function chWhy(ch, list, gyms) {
+  if (ch.needPrev) return L('routeNeedPrev', list[ch.id - 1].name);
+  if (ch.needBadge >= 0) return L('routeNeedBadge', gyms.gyms[ch.needBadge].leader);
+  return '';
+}
+
+// pantalla de un reto: el siguiente combate, el equipo y la mochila
+function challengeScreen(id) {
+  const again = () => challengeScreen(id);
+  const list = Engine.json('pt_challenges').list;
+  const ch = list[id];
+  if (ch.cleared) { message(L('routeDoneMsg', ch.name), () => topScreen().resume && topScreen().resume()); return; }
+  const nx = ch.next;
+  const who = chFoeText(nx) + (nx.size && nx.foe !== 'snorlax' ? ' · ' + L('nMon', nx.size) : '');
+  ask(ch.name + ' ' + ch.done + '/' + ch.n + '\n' + L('routeNext', who), [L('battleIt'), L('pokemon'), L('bag'), L('back')], k => {
+    if (k === 1) { push(partyScreen('menu')); return; }
+    if (k === 2) { push(bagScreen()); return; }
+    if (k !== 0) { topScreen().resume && topScreen().resume(); return; }
+    const go = () => {
+      encounterBg = CH_BG[id] || 'grass';
+      startBattle(6, id, r => afterChallenge(ch, nx, r, again));
+    };
+    if (nx.foe === 'snorlax') message(L('snorlaxWake'), go);
+    else go();
+  });
+}
+
+// tras un combate de reto: lo que dice el jefe, si se supero y que se abre
+function afterChallenge(ch, nx, r, again) {
+  const back = () => topScreen().resume && topScreen().resume();
+  const won = r && (r.outcome === 1 || r.outcome === 9);
+  const lines = [];
+  if (nx.foe === 'rival') lines.push(L(won ? 'rivalWin' : 'rivalLose', profile.rival));
+  if (won && nx.foe === 'snorlax' && r.outcome === 1) lines.push(L('snorlaxGone'));
+  if (won && r.routeCleared) {
+    lines.push(L('routeDoneMsg', ch.name));
+    if (ch.id === 6) lines.push(L('towerFlute'));
+    const g = Engine.json('pt_gyms');
+    if (ch.gate < 8) {
+      const gym = g.gyms[ch.gate];
+      if (gym.open) lines.push(L('gymNowOpen', gym.leader));
+      else if (gym.route < 0 && gym.km > g.km) lines.push(L('goalKm', gym.km - g.km, gym.leader));
+    } else if (g.leagueOpen) lines.push(L('goalLeague'));
+  }
+  const next = () => (won && !r.routeCleared && !r.blackout ? again() : back());
+  if (lines.length) message(lines, next);
+  else next();
+}
+
 // --------------------------------------------------------------- objetivo ---
 // La linea de "que sigue": siempre dice al jugador que hacer ahora.
 
@@ -40,14 +106,21 @@ function nextGoal(gyms) {
       const city = CITIES.findIndex(c => c.gym === i);
       if (g.open) return { text: L('goalGym', g.leader, cityName(CITIES[city])), city };
       if (i > 0 && !gyms.gyms[i - 1].badge) return { text: L('goalGym', gyms.gyms[i - 1].leader, ''), city };
+      if (g.route >= 0) return goalRoute(g.route);
       return { text: L('goalKm', (g.km - gyms.km), g.leader), city };
     }
     if (!S.champion) {
+      if (gyms.leagueRoute >= 0) return goalRoute(gyms.leagueRoute);
       if (!gyms.leagueOpen) return { text: L('goalLeagueKm', Math.max(0, 80 - gyms.km)), city: 10 };
       return { text: L('goalLeague'), city: 10 };
     }
   }
   return { text: L('goalDex', S.caught), city: -1 };
+}
+
+function goalRoute(id) {
+  const ch = Engine.json('pt_challenges').list[id];
+  return { text: L('goalRoute', ch.name, ch.done, ch.n, cityName(CITIES[ch.city])), city: ch.city };
 }
 
 // ------------------------------------------------------------------ inicio --
@@ -66,7 +139,7 @@ class HomeScreen {
     this.info = { gyms: g.gyms, km: g.km, leagueOpen: g.leagueOpen };
     this.goal = nextGoal(g);
     this.info.goalCity = this.goal.city;
-    checkPending(() => { checkRival(); maybeAutoEvent(); });
+    checkPending(() => maybeAutoEvent());
   }
   // camara sobre el mundo: sigue a la ciudad elegida (o se queda donde estaba con MENU)
   camera(t) {
@@ -74,7 +147,7 @@ class HomeScreen {
     const tx = Math.max(0, Math.min(WORLD_W - W, wx(c) - W / 2));
     const ty = Math.max(0, Math.min(WORLD_H - 196, wy(c) - 100));
     if (!this.cam) this.cam = { x: tx, y: ty };
-    if (this.sel < CITIES.length) {
+    if (this.sel < CITIES.length && !this.free) {
       this.cam.x += (tx - this.cam.x) * 0.18;
       this.cam.y += (ty - this.cam.y) * 0.18;
     }
@@ -133,6 +206,14 @@ class HomeScreen {
   }
   input(ev) {
     const n = CITIES.length + 1;
+    // arrastrar mueve el mapa libremente; la rueda vuelve a centrar en la ciudad
+    if (ev.k === 'drag' && this.cam && ev.y < 216) {
+      this.free = true;
+      this.cam.x = Math.max(0, Math.min(WORLD_W - W, this.cam.x - ev.dx));
+      this.cam.y = Math.max(0, Math.min(WORLD_H - 196, this.cam.y - ev.dy));
+      return;
+    }
+    if (ev.k !== 'tap' && ev.k !== 'drag') this.free = false;
     if (ev.k === 'up' || ev.k === 'left') this.sel = (this.sel + n - 1) % n;
     else if (ev.k === 'down' || ev.k === 'right') this.sel = (this.sel + 1) % n;
     else if (ev.k === 'ok') this.open(this.sel);
@@ -142,7 +223,7 @@ class HomeScreen {
         // tocar un pueblo: lo elige; tocarlo otra vez, entra
         const mx = ev.x + this.cam.x, my = ev.y - MAP_Y + this.cam.y;
         const best = CITIES.findIndex(c => Math.abs(mx - wx(c)) < 50 && Math.abs(my - wy(c)) < 42);
-        if (best >= 0) { if (best === this.sel) this.open(best); else this.sel = best; }
+        if (best >= 0) { this.free = false; if (best === this.sel) this.open(best); else this.sel = best; }
       } else if (ev.y > 216 && this.goal.city >= 0) this.sel = this.goal.city;  // tocar el objetivo lleva a su ciudad
     }
   }
@@ -185,12 +266,24 @@ function cityScreen(ci) {
     ], { right: () => money(S.money) })) });
     if (c.store) items.push({ label: L('celadon'), action: () => push(shopScreen(1, L('celadon'))) });
     if (c.battleShop) items.push({ label: L('battleShop'), right: S.bp + ' BP', action: () => push(shopScreen(3, L('battleShop'))) });
+    const chs = Engine.json('pt_challenges').list;
+    for (const ch of chs.filter(x => x.city === ci)) {
+      const why = ch.cleared ? L('routeCleared') : chWhy(ch, chs, g);
+      items.push({
+        label: ch.name, right: ch.cleared ? '✓' : ch.open ? ch.done + '/' + ch.n : L('locked'),
+        rightColor: ch.cleared ? '#30a050' : INK_DIM,
+        sub: ch.cleared ? L('routeCleared') : ch.open ? L('routeNext', chFoeText(ch.next)) : why,
+        disabled: !ch.open || ch.cleared, why,
+        action: () => challengeScreen(ch.id),
+      });
+    }
     if (c.gym >= 0) {
       const gym = g.gyms[c.gym];
       items.push({
         label: L('gymOf', gym.leader), right: gym.badge ? '★' : gym.open ? typeName(gym.type) : L('locked'),
         rightColor: gym.badge ? '#c09020' : INK_DIM,
-        sub: gym.open ? '' : (c.gym > 0 && !g.gyms[c.gym - 1].badge ? L('needBadge') : L('kmToOpen', gym.km - g.km)),
+        sub: gym.open ? '' : (c.gym > 0 && !g.gyms[c.gym - 1].badge ? L('needBadge')
+          : gym.route >= 0 ? L('routeToOpen', chs[gym.route].name) : L('kmToOpen', gym.km - g.km)),
         disabled: !gym.open, why: L('gymClosed'),
         action: () => ask(gym.leader + ' · ' + typeName(gym.type), [L('challenge'), L('back')], k => {
           if (k === 0) startBattle(2, c.gym, () => topScreen().resume && topScreen().resume());
@@ -200,7 +293,8 @@ function cityScreen(ci) {
     if (c.league) {
       items.push({
         label: L('league'), right: g.leagueActive ? (g.leagueIdx + 1) + '/5' : '',
-        sub: g.leagueOpen ? (g.leagueActive ? L('leagueNext', g.elite[g.leagueIdx].name) : '') : L('leagueNeed'),
+        sub: g.leagueOpen ? (g.leagueActive ? L('leagueNext', g.elite[g.leagueIdx].name) : '')
+          : g.leagueRoute >= 0 && g.gyms.every(x => x.badge) ? L('routeToOpen', chs[g.leagueRoute].name) : L('leagueNeed'),
         disabled: !g.leagueOpen, why: L('leagueNeed'),
         action: () => {
           const opts = g.leagueActive ? [L('leagueNext', g.elite[g.leagueIdx].name), L('pokemon'), L('bag'), L('leagueQuit'), L('back')] : [L('challenge'), L('back')];
