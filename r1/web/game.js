@@ -64,6 +64,6 @@ window.onSlowTick = () => {
   if (t && t.resume && t instanceof HomeScreen) t.resume();
 };
 
-document.addEventListener('visibilitychange', () => { if (document.hidden) saveNow(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { saveNow(); Cloud.upload(); } });
 
 boot();

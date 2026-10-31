@@ -74,27 +74,33 @@ function pickName(which, then) {
   push(new ListScreen(L(which === 'player' ? 'yourName' : 'rivalName'), items, { onBack: () => {} }));
 }
 
-// teclado con la rueda: mover entre letras, el boton escribe; o tocar las teclas
+// teclado con la rueda: mover entre letras, el boton escribe; o tocar las teclas.
+// opts: max (largo, 7 para nombres), keys (caracteres), group (guion cada tantos)
 class KeyboardScreen {
-  constructor(title, initial, onDone) {
+  constructor(title, initial, onDone, opts = {}) {
     this.title = title;
     this.name = initial || '';
     this.onDone = onDone;
-    this.keys = 'ABCDEFGHIJKLMNÑOPQRSTUVWXYZ'.split('').concat(['⌫', 'OK']);
+    this.max = opts.max || 7;
+    this.group = opts.group || 0;
+    this.keys = (opts.keys || 'ABCDEFGHIJKLMNÑOPQRSTUVWXYZ').split('').concat(['⌫', 'OK']);
     this.sel = 0;
   }
   keyRect(i) {
-    if (i >= 27) return { x: i === 27 ? 20 : 130, y: 214, w: 90, h: 24 };
-    return { x: 12 + (i % 9) * 24, y: 110 + Math.floor(i / 9) * 30, w: 22, h: 26 };
+    const nk = this.keys.length - 2;
+    if (i >= nk) return { x: i === nk ? 20 : 130, y: 214, w: 90, h: 24 };
+    const rowH = nk > 27 ? 26 : 30;  // 4 filas si no caben en 3
+    return { x: 12 + (i % 9) * 24, y: (nk > 27 ? 106 : 110) + Math.floor(i / 9) * rowH, w: 22, h: rowH - 4 };
   }
   draw(t) {
     menuBg();
     header(this.title);
     roundBox(30, 40, W - 60, 46, BOX.light);
-    for (let i = 0; i < 7; i++) {
-      const ch = this.name[i] || '';
-      textS(ch, 52 + i * 20, 52, INK, 'center');
-      rect(46 + i * 20, 66, 12, 2, i === this.name.length && Math.floor(t / 400) % 2 ? '#c03028' : '#a0a8b0');
+    const sp = this.max > 7 ? 16 : 20;
+    for (let i = 0; i < this.max; i++) {
+      const x = W / 2 - 8 + (i - (this.max - 1) / 2) * sp + (this.group && i >= this.group ? 4 : 0) - (this.group ? 2 : 0);
+      textS(this.name[i] || '', x, 52, INK, 'center');
+      rect(x - 6, 66, 12, 2, i === this.name.length && Math.floor(t / 400) % 2 ? '#c03028' : '#a0a8b0');
     }
     roundBox(6, 102, W - 12, 146, BOX.light);
     this.keys.forEach((k, i) => {
@@ -106,9 +112,9 @@ class KeyboardScreen {
   press(i) {
     const k = this.keys[i];
     if (k === '⌫') this.name = this.name.slice(0, -1);
-    else if (k === 'OK') { if (this.name) { pop(); this.onDone(this.name); } }
-    else if (this.name.length < 7) this.name += k;
-    if (this.name.length >= 7 && k !== '⌫' && k !== 'OK') this.sel = 28;  // lleno: salta a OK
+    else if (k === 'OK') { if (this.name && (this.max <= 7 || this.name.length === this.max)) { pop(); this.onDone(this.name); } }
+    else if (this.name.length < this.max) this.name += k;
+    if (this.name.length >= this.max && k !== '⌫' && k !== 'OK') this.sel = this.keys.length - 1;  // lleno: salta a OK
   }
   input(ev) {
     const n = this.keys.length;

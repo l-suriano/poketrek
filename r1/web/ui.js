@@ -87,6 +87,7 @@ function saveNow() {
   if (resetting) return;
   if (!Engine.call('pt_started')) return;
   store.set(SAVE_KEY, Engine.call('pt_save_b64'));
+  if (typeof Cloud !== 'undefined') Cloud.soon();
 }
 
 const prefs = { invertX: false, invertY: false };

@@ -4,7 +4,7 @@
 // nombres ni datos personales: solo un identificador al azar del aparato.
 // Se apaga en Ajustes > Enviar datos anonimos.
 
-const TELE_VERSION = 'r1-v17';
+const TELE_VERSION = 'r1-v18';
 const TELE_KEY = 'poketrek_device';
 const Tele = {
   queue: [],

@@ -74,6 +74,17 @@ Después se genera un QR con la dirección (por ejemplo con `qr/` del
 escanea con el R1. Al cambiar el juego hay que subir `VERSION` en `web/sw.js`
 para que el R1 baje la versión nueva.
 
+## Respaldo en la nube
+
+Opcional: el jugador lo activa en Ajustes > Respaldo en la nube. El juego crea
+un código al azar de 10 caracteres (sin I, O, 0 ni 1) y sube la partida a
+`/api/save` (`r1/functions/api/save.js`) como mucho cada 2 minutos y al salir
+de la app, solo si cambió. Se guarda en la tabla `saves` de la misma base D1
+(`r1/schema.sql`): la partida en base64 y los nombres del jugador y del rival.
+El código es la llave: con él se restaura desde Ajustes o desde la primera
+pantalla de un R1 sin partida ("Restore / Restaurar"). Todo va por POST; el
+código nunca va en la dirección.
+
 ## Créditos
 
 Sprites: [PMD SpriteCollab](https://sprites.pmdcollab.org/) (CC BY-NC 4.0).

@@ -19,6 +19,7 @@ function langScreen(then) {
   return new ListScreen('LANGUAGE / IDIOMA', [
     { label: 'English', action: () => { setLang(LANG_EN); pop(); then(); } },
     { label: 'Español', action: () => { setLang(LANG_ES); pop(); then(); } },
+    { label: 'Restore / Restaurar', action: () => restoreFlow() },
   ], { onBack: () => {} });
 }
 function setLang(l) { lang = l; Engine.call('pt_set_lang', l); for (const k in typeNames) delete typeNames[k]; }
@@ -660,7 +661,8 @@ function gymsScreen() {
     const items = g.gyms.map((gym, i) => ({
       label: gym.leader, right: gym.badge ? '★' : gym.open ? typeName(gym.type) : L('locked'),
       rightColor: gym.badge ? '#f0c020' : theme.dim,
-      sub: gym.open ? '' : (i > 0 && !g.gyms[i - 1].badge ? L('needBadge') : L('kmToOpen', gym.km - g.km)),
+      sub: gym.open ? '' : (i > 0 && !g.gyms[i - 1].badge ? L('needBadge')
+        : gym.route >= 0 ? L('routeToOpen', Engine.json('pt_challenges').list[gym.route].name) : L('kmToOpen', gym.km - g.km)),
       disabled: !gym.open,
       action: () => ask(gym.leader + ' · ' + typeName(gym.type), [L('challenge'), L('back')], k => {
         if (k === 0) startBattle(2, i, () => topScreen().resume());
@@ -824,6 +826,7 @@ function settingsScreen() {
     { label: L('renameRival'), right: profile.rival, action: () => push(new KeyboardScreen(L('rivalName'), profile.rival, n => { profile.rival = n; saveProfile(); })) },
     { label: L('autoEvents'), right: prefs.autoEvents !== false ? L('on') : L('off'), action: () => { prefs.autoEvents = prefs.autoEvents === false; savePrefs(); topScreen().resume(); } },
     { label: L('testMode'), right: prefs.testMode ? L('on') : L('off'), action: () => { prefs.testMode = !prefs.testMode; savePrefs(); topScreen().resume(); } },
+    { label: L('cloud'), right: prefs.cloudCode && !prefs.cloudOff ? L('on') : L('off'), action: () => push(cloudScreen()) },
     { label: L('telemetry'), right: prefs.telemetry !== false ? L('on') : L('off'), action: () => { prefs.telemetry = prefs.telemetry === false; savePrefs(); topScreen().resume(); } },
     { label: L('errorLog'), right: errLog.length || '', action: () => push(errorLogScreen()) },
     { label: L('credits'), action: () => message(L('creditsText')) },
