@@ -9,7 +9,8 @@ volver a ejecutarlo no repite peticiones. Borra esa carpeta para refrescar.
 
 Que se toma de gen 1 y que no:
 - tipos de especie: past_types (Clefairy normal, Magnemite electrico puro)
-- stat Special: past_stats de generation-i
+- stats base: past_stats de todas las generaciones (Special de generation-i y
+  los valores anteriores a los cambios de gen 6, en generation-v)
 - movimientos: tipo/poder/precision/PP de gen 1 aplicando past_values
 - tabla de tipos: past_damage_relations de generation-i (15 tipos)
 - aprendizaje por nivel y MT/MO: version group red-blue
@@ -228,10 +229,12 @@ def main():
         p = get(f'pokemon/{num}')
         s = get(f'pokemon-species/{num}')
         base = {st['stat']['name']: st['base_stat'] for st in p['stats']}
-        for past in p['past_stats']:
-            if past['generation']['name'] == 'generation-i':
-                for st in past['stats']:
-                    base[st['stat']['name']] = st['base_stat']
+        # cada past_stats vale hasta su generacion (generation-v: los de antes de
+        # los cambios de gen 6, como la Defensa 30 de Pikachu); aplicados del mas
+        # nuevo al mas viejo dejan los de gen 1, con su Special
+        for past in sorted(p['past_stats'], key=gen_num, reverse=True):
+            for st in past['stats']:
+                base[st['stat']['name']] = st['base_stat']
         t1, t2 = gen1_types(p)
         species[num] = {
             'slug': p['name'],
@@ -241,6 +244,8 @@ def main():
             'capture_rate': s['capture_rate'],
             'base_exp': p['base_experience'],
             'growth': s['growth_rate']['name'],
+            'height_dm': p['height'],   # decimetros: tamano en pantalla
+            'weight_hg': p['weight'],   # hectogramos
         }
         lv, tms = [], set()
         for mv in p['moves']:

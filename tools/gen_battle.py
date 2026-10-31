@@ -199,9 +199,11 @@ def main():
         "  uint8_t flee;                  // % de huida tras un lanzamiento fallido\n"
         "  uint16_t learnStart; uint8_t learnCount;  // tramo en LEARN_TBL\n"
         "  uint64_t machines;             // bit i = puede aprender MACHINE_MOVE[i]\n"
+        "  uint8_t heightDm;              // altura real en decimetros (tamano del sprite)\n"
+        "  uint16_t weightHg;             // peso real en hectogramos\n"
         "};\n\n")
     out.append("static const BattleSpecies BSPECIES[152] = {\n")
-    out.append("  { T_NORMAL, T_NONE, 0, 0, 0, 0, 0, 0, 0, G_MEDIUM, 0, 0, 0, 0ULL },\n")
+    out.append("  { T_NORMAL, T_NONE, 0, 0, 0, 0, 0, 0, 0, G_MEDIUM, 0, 0, 0, 0ULL, 0, 0 },\n")
     for num in sorted(SPECIES):
         s = SPECIES[num]
         t1, t2 = s['types']
@@ -213,7 +215,8 @@ def main():
         out.append(
             f"  {{ T_{ident(t1)}, {t2c}, {s['hp']}, {s['attack']}, {s['defense']}, {s['speed']}, "
             f"{s['special']}, {s['capture_rate']}, {s['base_exp']}, G_{ident(s['growth'])}, "
-            f"{flee_pct(s['capture_rate'])}, {st}, {cnt}, 0x{mask:014X}ULL }},  // {num} {s['slug']}\n")
+            f"{flee_pct(s['capture_rate'])}, {st}, {cnt}, 0x{mask:014X}ULL, {s['height_dm']}, "
+            f"{s['weight_hg']} }},  // {num} {s['slug']}\n")
     out.append("};\n\n")
 
     out.append("// ---- evoluciones de gen 1 (nivel, piedra o intercambio) ----\n")

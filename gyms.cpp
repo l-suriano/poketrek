@@ -4,14 +4,14 @@ const GymInfo GYMS[NUM_GYMS] = {
   // +% de nivel por tramo: afinados con `sim/sim tune` (ver sim/sim.cpp) para que
   // un jugador casual gane de 50 % (Brock) a 15 % (Giovanni) al primer intento
   // lider       tipo        km  +% <25 25-44 45+  IA eq  as   as alto  resto del equipo
-  { "Brock",     T_ROCK,      0, {  12,  30,  44 }, 2, 2,  95, 142, { 74, 111, 138, 140, 27, 104, 0, 0 } },
+  { "Brock",     T_ROCK,      0, {  12,  29,  44 }, 2, 2,  95, 142, { 74, 111, 138, 140, 27, 104, 0, 0 } },
   { "Misty",     T_WATER,     3, {   2,   3,   9 }, 2, 3, 120, 131, { 54, 116, 118, 90, 60, 72, 86, 0 } },
-  { "Lt. Surge", T_ELECTRIC,  8, {   2,   2,   7 }, 3, 3,  25, 133, { 100, 81, 125, 0, 0, 0, 0, 0 } },
-  { "Erika",     T_GRASS,    15, {  17,   7,  10 }, 3, 4,  43, 102, { 69, 114, 46, 1, 0, 0, 0, 0 } },
+  { "Lt. Surge", T_ELECTRIC,  8, {   2,   3,   7 }, 3, 3,  25, 133, { 100, 81, 125, 0, 0, 0, 0, 0 } },
+  { "Erika",     T_GRASS,    15, {  17,   7,   9 }, 3, 4,  43, 102, { 69, 114, 46, 1, 0, 0, 0, 0 } },
   { "Koga",      T_POISON,   25, {  13,   7,  10 }, 3, 4, 109,  32, { 88, 23, 41, 48, 72, 29, 0, 0 } },
-  { "Sabrina",   T_PSYCHIC,  35, { -17, -10,  -7 }, 4, 5,  63,  63, { 96, 122, 79, 124, 102, 0, 0, 0 } },
+  { "Sabrina",   T_PSYCHIC,  35, { -18, -10,  -8 }, 4, 5,  63,  63, { 96, 122, 79, 124, 102, 0, 0, 0 } },
   { "Blaine",    T_FIRE,     50, {  -2,   2,  10 }, 4, 5,  58,   4, { 77, 37, 126, 133, 0, 0, 0, 0 } },
-  { "Giovanni",  T_GROUND,   65, {  -3,  -1,  10 }, 4, 6, 111, 111, { 32, 29, 50, 27, 104, 0, 0, 0 } },
+  { "Giovanni",  T_GROUND,   65, {  -3,   1,  11 }, 4, 6, 111, 111, { 32, 29, 50, 27, 104, 0, 0, 0 } },
 };
 
 // Alto Mando y Campeon de Rojo/Azul (formas base: evolucionan segun su nivel).

@@ -164,6 +164,13 @@ class TestBattleData(unittest.TestCase):
         self.assertEqual(sp[113]['special'], 105)  # Chansey
         self.assertEqual(sp[65]['special'], 135)   # Alakazam
 
+    def test_stats_de_antes_de_los_cambios_de_gen_6(self):
+        sp = self.bd.SPECIES
+        self.assertEqual(sp[25]['defense'], 30)    # Pikachu (40 desde gen 6)
+        self.assertEqual(sp[15]['attack'], 80)     # Beedrill (90)
+        self.assertEqual(sp[18]['speed'], 91)      # Pidgeot (101)
+        self.assertEqual(sp[83]['attack'], 65)     # Farfetch'd (90 desde gen 7)
+
     def test_movimientos_con_valores_de_gen_1(self):
         self.assertEqual(self.mv['bite']['type'], 'normal')
         self.assertEqual(self.mv['karate-chop']['type'], 'normal')

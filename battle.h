@@ -13,6 +13,13 @@
 // - Atadura, Constriccion, Giro Fuego y Tenaza quitan 1/8 por turno durante
 //   2-5 turnos pero no impiden atacar (en gen 1 bloqueaban al rival entero).
 
+// Multiplicador de PS. 1 = ritmo de gen 1 (2-3 golpes por KO); 2 = batallas mas
+// largas, con mas turnos para la estrategia. Si se cambia, hay que volver a
+// afinar gimnasios y Liga con sim/sim tune y tune-elite.
+#ifndef HP_MULT
+#define HP_MULT 1
+#endif
+
 #define PARTY_MAX 6
 #define BATTLE_EVENTS 48
 

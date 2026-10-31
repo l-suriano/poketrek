@@ -55,7 +55,7 @@ void monInit(BattleMon &m, uint8_t species, uint8_t level, const uint8_t genes[5
   m.level = level;
   m.type1 = s.type1;
   m.type2 = s.type2;
-  m.maxHp = calcStat(s.hp, level, statExp[0], true, genes[0]);
+  m.maxHp = calcStat(s.hp, level, statExp[0], true, genes[0]) * HP_MULT;
   m.atk = calcStat(s.atk, level, statExp[1], false, genes[1]);
   m.def = calcStat(s.def, level, statExp[2], false, genes[2]);
   m.spe = calcStat(s.spe, level, statExp[3], false, genes[3]);

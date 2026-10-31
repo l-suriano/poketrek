@@ -202,7 +202,7 @@ TEST(battle, equipo_de_gimnasio_escala_con_el_jugador) {
   // BL 40 cae en el tramo 25-44
   CHECK_EQ((int)brock.count, 2);
   CHECK_EQ((int)brock.party[1].level, gymAceLevel(0, 40));
-  CHECK_EQ((int)brock.party[1].level, 40 * (100 + GYMS[0].levelPct[1]) / 100);
+  CHECK_EQ((int)brock.party[1].level, (40 * (100 + GYMS[0].levelPct[1]) + 50) / 100);  // redondeado
   CHECK_EQ((int)brock.aiTier, (int)GYMS[0].aiTier);
   CHECK_EQ((int)gio.count, 6);
   CHECK_EQ((int)gio.party[5].level, gymAceLevel(7, 40));
