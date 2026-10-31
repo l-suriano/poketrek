@@ -52,76 +52,7 @@ class StarterScreen {
   }
 }
 
-// ----------------------------------------------------------------- inicio --
-// El companero en un mapa de pasto, con el menu "Start" de los juegos.
-
-class HomeScreen {
-  constructor() {
-    this.menu = new ListScreen('', [], {});
-    this.menu.draw = () => {};
-  }
-  enter() { this.build(); }
-  resume() { this.build(); }
-  build() {
-    refresh();
-    const sel = this.menu.sel;
-    this.menu.items = [
-      { label: L('explore'), right: S.events + S.drops ? '!' : '', action: () => push(exploreScreen()) },
-      { label: L('pokemon'), action: () => push(partyScreen('menu')) },
-      { label: L('bag'), action: () => push(bagScreen()) },
-      { label: L('centerShort'), right: S.healAt ? '…' : '', action: () => pokemonCenter(() => this.build()) },
-      { label: L('shop'), action: () => push(shopsScreen()) },
-      { label: L('gyms'), action: () => push(gymsScreen()) },
-      { label: L('tournaments'), right: S.dcPlayed ? '' : '!', action: () => push(tourScreen()) },
-      { label: L('pokedex'), action: () => push(dexScreen()) },
-      { label: L('settings'), action: () => push(settingsScreen()) },
-    ];
-    this.menu.sel = sel;
-    checkPending(() => checkRival());
-  }
-  draw(t) {
-    menuBg();
-    header(profile.player, money(S.money));
-    drawOverworld(19, t, S.night);
-    const p = partner();
-    if (p) {
-      ctx.fillStyle = 'rgba(0,0,0,0.25)';
-      ctx.beginPath(); ctx.ellipse(70, 97, 12, 3, 0, 0, Math.PI * 2); ctx.fill();
-      drawMon(p.sp, 'front', 70, 97, t, { scale: monScale(p.sp, p.hd, 'front', 34) });
-    }
-    // datos del entrenador
-    roundBox(3, 134, 104, 145, BOX.light);
-    if (p) { textS(p.name.slice(0, 10), 10, 142); textS('Lv' + p.lv, 10, 154, INK_DIM); }
-    textS('EE', 10, 170);
-    rect(30, 172, 70, 5, '#404848');
-    rect(31, 173, Math.round(68 * S.ee / S.eeMax), 3, '#40a8f8');
-    textS(String(S.ee), 100, 180, INK_DIM, 'right');
-    textS((S.meters / 1000).toFixed(1) + 'km', 10, 194);
-    textS('★' + popcount(S.badges), 10, 208, '#c09020');
-    textS(S.caught + '/151', 100, 208, INK, 'right');
-    textS(S.outside ? L('outside') : L('atHome'), 10, 224, S.outside ? '#c03028' : INK_DIM);
-    textS(S.night ? L('night') : L('day'), 10, 238, INK_DIM);
-    if (S.events + S.drops) textS('!' + (S.events + S.drops), 100, 224, '#c03028', 'right');
-    // menu Start
-    const m = this.menu;
-    roundBox(109, 134, 128, 145, BOX.light);
-    m.items.forEach((it, i) => {
-      const y = 141 + i * 15;
-      if (i === m.sel) cursor(116, y, INK);
-      textS(it.label.slice(0, 12), 126, y);
-      if (it.right) textS(it.right, 230, y, '#c03028', 'right');
-    });
-  }
-  input(ev) {
-    if (ev.k === 'back') return;
-    if (ev.k === 'tap') {
-      const i = Math.floor((ev.y - 139) / 15);
-      if (ev.x > 109 && i >= 0 && i < this.menu.items.length) { if (i === this.menu.sel) this.menu.choose(i); else this.menu.sel = i; }
-      return;
-    }
-    this.menu.input(ev);
-  }
-}
+// el inicio (HomeScreen) es el mapa de Kanto: ver kanto.js
 
 function popcount(n) { let c = 0; while (n) { c += n & 1; n >>= 1; } return c; }
 
@@ -145,11 +76,12 @@ function exploreScreen() {
     ];
   };
   const s = new ListScreen(L('explore'), build(), {
-    y0: 50, refresh: build,
+    y0: 62, refresh: build,
     drawTop: () => {
-      text('EE ' + S.ee + '/' + S.eeMax, 6, 23);
-      bar(6, 33, W - 12, 4, S.ee / S.eeMax, theme.accent);
-      text(S.outside ? (lang === LANG_ES ? `Evento en ${S.toEvent} pasos` : `Event in ${S.toEvent} steps`) : (S.steps + ' ' + (lang === LANG_ES ? 'pasos' : 'steps')), 6, 40, theme.dim);
+      roundBox(3, 21, W - 6, 34, BOX.light);
+      textS('EE ' + S.ee + '/' + S.eeMax, 10, 27);
+      bar(10, 37, W - 20, 4, S.ee / S.eeMax, theme.accent);
+      text(S.outside ? (lang === LANG_ES ? `Evento en ${S.toEvent} pasos` : `Event in ${S.toEvent} steps`) : (S.steps + ' ' + (lang === LANG_ES ? 'pasos' : 'steps')), 10, 44, INK_DIM);
     },
   });
   return s;
@@ -667,6 +599,7 @@ function bagScreen(opts = {}) {
   }));
   const s = new ListScreen(L('bag'), items, { right: () => money(S.money) });
   s.items.forEach((it, k) => {
+    if (it.isBack) return;
     const p = pockets[k];
     Object.defineProperty(it, 'right', { get: () => p === 'tm' ? S.tms.length : S.bag.filter(b => b.pocket === p).length });
   });
