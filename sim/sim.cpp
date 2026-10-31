@@ -6,6 +6,8 @@
 //   ./sim tune [N]    busca para cada lider el levelPct que deja al jugador
 //                     casual en su objetivo (casualTarget) y lo imprime
 //   ./sim tune-elite [N]  lo mismo para la Liga (ELITE_PCT, LEAGUE_TARGET)
+//   ./sim tour [N]    torneos de la Open Cup por categoria: % de victorias por
+//                     combate, % de campeones y ganancia media por inscripcion
 //
 // Dos perfiles de jugador:
 //   casual    6 Pokemon al azar, movimientos por defecto, IA nivel 2, 2 pociones
@@ -13,6 +15,7 @@
 //             cobertura (incluye MT), IA nivel 4, 5 pociones
 #include "../battle.h"
 #include "../gyms.h"
+#include "../tournament.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -285,7 +288,114 @@ static void tune(int n) {
   printTable(n, best);
 }
 
+// ---------------------------------------------------------------- torneos --
+// Tres perfiles con 3 Pokemon al azar (evolucionados para su nivel):
+//   casual    movimientos por defecto, IA 2
+//   medio     movimientos por defecto, IA 3
+//   preparado cobertura con MT, IA 4
+// Las reglas piden que el medio quede mas o menos a la par y el preparado gane.
+enum { PR_CASUAL, PR_AVERAGE, PR_PREPARED, NUM_PROFILES };
+static const char *PROFILE_NAME[NUM_PROFILES] = { "casual", "medio", "preparado" };
+
+static void buildTourPlayer(BattleSide &p, uint8_t level, int profile, Rng &rng) {
+  p = BattleSide();
+  p.count = TOUR_TEAM;
+  uint8_t used[TOUR_TEAM] = {0};
+  for (int i = 0; i < TOUR_TEAM; i++) {
+    uint8_t sp;
+    bool dup;
+    do {
+      sp = randomBase(rng);
+      dup = false;
+      for (int j = 0; j < i; j++) dup |= used[j] == sp;
+    } while (dup);
+    used[i] = sp;
+    makeMon(p.party[i], sp, level, rng);
+  }
+  if (profile == PR_PREPARED) {
+    // cobertura general: contra un rival de cada tipo frecuente
+    static const uint8_t COMMON[5] = { T_NORMAL, T_WATER, T_GRASS, T_FIRE, T_POISON };
+    BattleMon dummies[5];
+    for (int d = 0; d < 5; d++) {
+      monInit(dummies[d], 1, level);
+      dummies[d].type1 = COMMON[d];
+      dummies[d].type2 = T_NONE;
+    }
+    for (int i = 0; i < TOUR_TEAM; i++) pickMovesSmart(p.party[i], dummies, 5, true);
+  }
+  p.aiTier = profile == PR_PREPARED ? 4 : profile == PR_AVERAGE ? 3 : 2;
+  p.potions = TOUR_ITEMS;
+  p.potionHeal = potionForLevel(level);
+}
+
+// un torneo entero: devuelve las victorias (0..3)
+static int tourRun(uint8_t tier, uint8_t level, int profile, uint32_t seed) {
+  Rng rng;
+  rng.seed(seed * 2654435761u + tier * 131 + level * 7 + profile);
+  Tournament run;
+  run.cup = CUP_OPEN;
+  run.tier = tier;
+  run.oppLevel = (uint8_t)(level + TOUR_TIERS[tier].offset);
+  run.seed = rng.next();
+  uint32_t teamSeed = rng.next();
+  while (!tourOver(run)) {
+    Rng teamRng;
+    teamRng.seed(teamSeed);  // el mismo equipo, curado, en cada ronda
+    Battle b;
+    buildTourPlayer(b.side[0], level, profile, teamRng);
+    tourOpponent(run, b.side[0], b.side[1]);
+    battleInit(b, rng.next(), false);
+    for (int turn = 0; turn < 1500 && !b.outcome; turn++) {
+      for (int s = 0; s < 2; s++)
+        if (battleNeedsSwitch(b, s)) battleSwitchIn(b, s, battleAiPickSwitch(b, s));
+      battleTurn(b, battleAiChoose(b, 0), battleAiChoose(b, 1));
+    }
+    tourReport(run, b.outcome == OUT_WIN0, false, 0, 0);
+  }
+  return run.wins;
+}
+
+static void printTours(int n) {
+  printf("Torneos (Open Cup): %% victorias por combate / %% campeon / ganancia media por inscripcion\n");
+  printf("(ganancia en cuotas: 0 = a la par; ronda 1 pierde la cuota, semifinal la devuelve,\n");
+  printf(" final x1,5, campeon x3)\n\n");
+  for (int tier = 0; tier < NUM_TOUR_TIERS; tier++) {
+    printf("%-7s", TOUR_TIERS[tier].en);
+    for (int pr = 0; pr < NUM_PROFILES; pr++) printf(" | %-24s", PROFILE_NAME[pr]);
+    printf("\n");
+    double sum[NUM_PROFILES] = {};
+    int rows = 0;
+    for (int li = 2; li < NUM_LEVELS; li++, rows++) {
+      uint8_t level = LEVELS[li];
+      printf("  L%-3d ", level);
+      for (int pr = 0; pr < NUM_PROFILES; pr++) {
+        int battles = 0, won = 0, champs = 0;
+        double net = 0;
+        for (int i = 0; i < n; i++) {
+          int w = tourRun((uint8_t)tier, level, pr, (uint32_t)i);
+          won += w;
+          battles += w + (w < TOUR_ROUNDS ? 1 : 0);
+          champs += w == TOUR_ROUNDS;
+          net += (w == 3 ? 3.0 : w == 2 ? 1.5 : w == 1 ? 1.0 : 0.0) - 1.0;
+        }
+        sum[pr] += net / n;
+        printf(" | %3.0f%% %3.0f%% %+5.2f cuotas  ", 100.0 * won / battles, 100.0 * champs / n, net / n);
+      }
+      printf("\n");
+    }
+    printf("  media");
+    for (int pr = 0; pr < NUM_PROFILES; pr++) printf(" |           %+5.2f cuotas  ", sum[pr] / rows);
+    printf("\n\n");
+  }
+}
+
 int main(int argc, char **argv) {
+  bool tours = argc > 1 && strcmp(argv[1], "tour") == 0;
+  if (tours) {
+    int n = argc > 2 ? atoi(argv[2]) : 300;
+    printTours(n < 1 ? 1 : n);
+    return 0;
+  }
   bool tuning = argc > 1 && strcmp(argv[1], "tune") == 0;
   bool tuningLeague = argc > 1 && strcmp(argv[1], "tune-elite") == 0;
   bool league = argc > 2 && strcmp(argv[1], "league") == 0;  // ./sim league PCT [N]
