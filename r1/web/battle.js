@@ -10,7 +10,7 @@ const ROUTE_BG = ['grass', 'forest', 'cave', 'cave', 'grass', 'water', 'gym', 'c
 function startBattle(kind, arg, after) {
   refresh();
   const v = Engine.json('pt_battle_start', kind, arg);
-  if (v.error) { message(L('noEffect')); return; }
+  if (v.error) { message(v.error === 'fainted' ? L('allFainted') : v.error === 'gone' ? L('wildGone', '') : L('noEffect')); return; }
   let bg = encounterBg, accent;
   if (kind === 2) { bg = 'gym'; accent = shade(TYPE_COLORS[Engine.json('pt_gyms').gyms[arg].type], 30); }
   else if (kind === 3) bg = 'league';
@@ -33,23 +33,32 @@ class BattleScreen {
     this.accent = accent;
     this.t0 = performance.now();
     this.wild = v.kind === 'wild' || v.kind === 'legend';
-    this.foeName = v.foeName || '';
+    this.foeName = v.kind === 'rival' ? profile.rival : (v.foeName || '');
     const me = v.me.party[v.me.active];
     this.disp = [this.monDisp(me), this.monDisp(v.foe.mon)];
     v.me.party.forEach(m => spriteImage(m.sp));
     spriteImage(v.foe.mon.sp);
     this.queue = [];
     this.cur = null;
+    this.fx = [];        // efectos de ataque en curso
+    this.shakeT = 0;     // temblor de pantalla
+    this.lvlBox = null;  // ventana de stats al subir de nivel
     this.mode = 'queue';
     this.sel = 0;
     this.msel = 0;
     this.text = '';
     this.ended = false;
     // presentacion
+    // el entrenador rival aparece primero y se va cuando saca a su Pokemon
+    this.trainerKey = this.wild ? null : trainerKeyFor(v);
+    if (this.trainerKey) { trainerImage(this.trainerKey); this.trainerOn = true; this.trainerT = performance.now(); this.disp[1].hidden = true; }
     if (this.wild) this.say(v.kind === 'legend' ? L('legendAppeared', v.foe.mon.name) : L('wildAppeared', v.foe.mon.name));
     else {
-      this.say(L('trainerWants', this.foeName));
-      this.say(lang === LANG_ES ? `¡${this.foeName} sacó a ${v.foe.mon.name}!` : `${this.foeName} sent out ${v.foe.mon.name}!`);
+      this.say(L('trainerWants', this.foeName), 1400);
+      this.say(lang === LANG_ES ? `¡${this.foeName} sacó a ${v.foe.mon.name}!` : `${this.foeName} sent out ${v.foe.mon.name}!`, 1100, t => {
+        this.trainerOn = false; this.trainerOffT = t;
+        this.disp[1].hidden = false; this.disp[1].enterT = t + 250;
+      });
     }
     this.say(lang === LANG_ES ? `¡Adelante, ${me.name}!` : `Go! ${me.name}!`);
   }
@@ -87,7 +96,11 @@ class BattleScreen {
     for (const ev of res.ev || []) {
       const d = () => this.disp[ev.s];
       if (ev.k === 'move') {
-        this.say(eventText(ev, ctx2), 900, t => { d().anim = 'Attack'; d().animT = t; });
+        this.say(eventText(ev, ctx2), 1000, t => {
+          d().anim = 'Attack'; d().animT = t;
+          this.fx.push(new MoveFx(ev, t + 150));
+          if (ev.p && (ev.t === T.GROUND || ev.t === T.ROCK)) this.shakeT = t + 500;
+        });
       } else if (ev.k === 'dmg') {
         if (ev.a) continue;  // al sustituto
         this.step(650, t => { const m = d(); m.from = m.shown; m.hp = ev.hp; m.hpT = t; m.flashT = t; m.anim = 'Hurt'; m.animT = t; });
@@ -106,6 +119,10 @@ class BattleScreen {
         this.say(eventText(ev, ctx2), 1000, () => { if (ev.a < 0x80) d().st = ev.a; });
       } else if (ev.k === 'lvl') {
         this.say(eventText(ev, ctx2), 1100, () => { if (ev.i === this.v.me.active) this.disp[0].lv = ev.lv; });
+        if (ev.st) this.say(eventText(ev, ctx2), 2400, t => { this.lvlBox = { st: ev.st, dl: ev.dl, t }; });
+        this.step(1, () => { this.lvlBox = null; });
+      } else if (ev.k === 'crit' || (ev.k === 'eff' && ev.a === 0xF2 && ev.b > 2)) {
+        this.say(eventText(ev, ctx2), 1000, t => { this.shakeT = t; });
       } else if (ev.k === 'ball') {
         // lo cuenta la pantalla del lanzamiento
       } else {
@@ -128,7 +145,7 @@ class BattleScreen {
   act(kind, a = 0, b = 0, c = 0) {
     const res = Engine.json('pt_battle_act', kind, a, b, c);
     if (res.error) {
-      const why = { move: L('noPP'), run: L('cantRun'), item: L('noEffect'), switch: L('alreadyOut') }[res.error];
+      const why = { move: L('noPP'), run: L('cantRun'), item: L('noEffect'), switch: L('alreadyOut'), boxfull: L('pcFull') }[res.error];
       if (why) { this.say(why, 1000); this.mode = 'queue'; }
       return res;
     }
@@ -148,14 +165,15 @@ class BattleScreen {
       disabled: !m.hp || i === v.me.active, why: !m.hp ? L('fainted') : L('alreadyOut'),
       action: () => { pop(); this.act(1, i); },
     }));
-    return new ListScreen(forced ? L('chooseNext') : L('pokemon'), items, { rowH: 26, onBack: forced ? () => {} : () => pop() });
+    return new ListScreen(forced ? L('chooseNext') : L('pokemon'), items, { rowH: 26, onBack: forced ? () => {} : undefined });
   }
 
   bagMenu() {
     refresh();
     const v = this.v;
     const items = [];
-    if (v.canThrow) for (const id of BALLS) {
+    const full = S.party.length >= 6 && S.boxCount >= 60;
+    if (v.canThrow && !full) for (const id of BALLS) {
       const b = S.bag.find(x => x.id === id);
       if (b) items.push({ label: b.name, right: '×' + b.n, action: () => { pop(); this.throwBall(id); } });
     }
@@ -164,7 +182,7 @@ class BattleScreen {
         if (v.itemsLeft <= 0) { message(L('noItemsLeft')); return; }
         pop();
         const party = this.v.me.party.map((m, i) => ({ label: m.name, right: 'Lv' + m.lv, icon: m.sp, sub: `${m.hp}/${m.max}`, hp: m.hp / m.max,
-          action: () => { pop(); const r = this.act(2, b.id, i); if (r.error) message(L('noEffect')); } }));
+          action: () => { pop(); this.act(2, b.id, i); } }));
         push(new ListScreen(L('onWhich'), party, { rowH: 26 }));
       } });
     }
@@ -197,7 +215,7 @@ class BattleScreen {
     if (this.ended) return;
     this.ended = true;
     const v = this.v;
-    if (v.outcome === 1 && !this.wild) this.say(L('youWon'), 1100);
+    if (v.outcome === 1 && !this.wild) this.say(L('youWon'), 1400, t => { if (this.trainerKey) { this.trainerOn = true; this.trainerT = t; } });
     if (v.outcome === 2) this.say(L('youLost'), 1300);
     if (v.outcome === 9) this.say(L('caught', v.foe.mon.name), 1300);
     const r = Engine.json('pt_battle_end');
@@ -221,7 +239,7 @@ class BattleScreen {
   // ---- dibujo (al estilo de FireRed / LeafGreen) ----
   drawMonAt(i, x, y, side, t, k) {
     const m = this.disp[i];
-    if (m.faintT && t - m.faintT > 400) return;
+    if (m.hidden || (m.faintT && t - m.faintT > 400)) return;
     const enter = Math.min(1, (t - m.enterT) / 350);
     let ox = 0, oy = 0;
     if (m.anim === 'Attack' && t - m.animT < 400) ox += Math.sin((t - m.animT) / 400 * Math.PI) * (i === 0 ? 10 : -10);
@@ -239,6 +257,15 @@ class BattleScreen {
       ctx.fillStyle = `rgba(255,255,255,${0.8 * (1 - enter)})`;
       ctx.beginPath(); ctx.arc(x, y - 14, 24 * enter + 4, 0, Math.PI * 2); ctx.fill();
     }
+  }
+
+  // el entrenador entra desde la derecha y sale hacia la derecha
+  drawTrainerSprite(t) {
+    if (!this.trainerKey) return;
+    let dx = null;
+    if (this.trainerOn) dx = Math.max(0, 1 - (t - this.trainerT) / 400) * 110;
+    else if (this.trainerOffT && t - this.trainerOffT < 300) dx = (t - this.trainerOffT) / 300 * 110;
+    if (dx !== null) drawTrainer(this.trainerKey, 178 + dx, 92);
   }
 
   infoBox(i, x, y, w, t, mine) {
@@ -274,18 +301,24 @@ class BattleScreen {
     if (this.mode === 'queue') this.runQueue(t);
     const night = S && S.night;
     const FH = 176;
+    ctx.save();
+    ctx.translate(shakeOffset(this.shakeT, t), 0);
     drawBattleBg(this.bg, t, night, FH, this.accent);
     // las plataformas entran deslizandose
     const slide = Math.max(0, 1 - (t - this.t0) / 600);
     platform(176 + slide * 120, 88, 50, 11, this.bg, night);
     platform(64 - slide * 120, 166, 60, 12, this.bg, night);
     if (slide === 0) {
+      this.drawTrainerSprite(t);
       this.drawMonAt(1, 176, 88, 'front', t, 38);
       this.drawMonAt(0, 64, 166, 'back', t, 44);
-      this.infoBox(1, 4, 8, 124, t, false);
+      this.fx = this.fx.filter(f => f.draw(t));
+      if (!this.disp[1].hidden) this.infoBox(1, 4, 8, 124, t, false);
       this.infoBox(0, 112, 118, 124, t, true);
       if (this.v.shiny && Math.floor(t / 300) % 2) textS('✦', 206, 36, '#f8d030', 'left', '#806010');
     }
+    ctx.restore();
+    if (this.lvlBox) this.drawLevelBox(t);
     // panel de abajo: cuadro oscuro de texto y, en el menu, recuadro blanco a la derecha
     roundBox(0, FH, W, H - FH, BOX.dark);
     if (this.mode === 'menu') this.drawMenu(t);
@@ -299,6 +332,18 @@ class BattleScreen {
       }
     }
     battleWipe(this.t0, t);
+  }
+
+  // ventana de subida de nivel: primero lo que subio cada stat, luego el total
+  drawLevelBox(t) {
+    const b = this.lvlBox;
+    const names = lang === LANG_ES ? ['PS', 'ATAQUE', 'DEFENSA', 'VELOCID.', 'ESPECIAL'] : ['HP', 'ATTACK', 'DEFENSE', 'SPEED', 'SPECIAL'];
+    const totals = t - b.t > 1200;
+    roundBox(98, 6, 138, 86, BOX.light);
+    names.forEach((n, i) => {
+      textS(n, 106, 14 + i * 15);
+      textS(totals ? String(b.st[i]) : '+' + b.dl[i], 228, 14 + i * 15, totals ? INK : '#c03028', 'right');
+    });
   }
 
   drawMenu() {
@@ -332,8 +377,15 @@ class BattleScreen {
     if (mv) {
       textS('PP', 12, 252, INK);
       textS(`${mv.pp}/${mv.max}`, 60, 252, mv.pp ? INK : '#c03028');
-      typeChip(mv.type, 110, 251);
-      textS(mv.pow ? String(mv.pow) : '—', W - 12, 252, INK_DIM, 'right');
+      typeChip(mv.type, 112, 251);
+      if (mv.pow) textS((lang === LANG_ES ? 'POT ' : 'PWR ') + mv.pow, 12, 266, INK_DIM);
+    }
+    backButton(W - 28, 258);
+    if (this.msel >= me.moves.length) {
+      cursor(W - 104, 266, INK);
+      textS(L('back'), W - 34, 266, INK, 'right');
+    } else {
+      textS(L('back'), W - 34, 266, INK_DIM, 'right');
     }
   }
 
@@ -352,12 +404,12 @@ class BattleScreen {
       return;
     }
     if (this.mode === 'moves') {
-      const n = this.v.me.party[this.v.me.active].moves.length;
+      const n = this.v.me.party[this.v.me.active].moves.length + 1;  // + Volver
       if (ev.k === 'up' || ev.k === 'left') this.msel = (this.msel + n - 1) % n;
       else if (ev.k === 'down' || ev.k === 'right') this.msel = (this.msel + 1) % n;
       else if (ev.k === 'back') this.mode = 'menu';
       else if (ev.k === 'tap') {
-        if (ev.y < 182 || ev.y > 246) { this.mode = 'menu'; return; }
+        if (ev.y < 182 || ev.y > 246 || inBack(ev, W - 28, 258)) { this.mode = 'menu'; return; }
         const i = (ev.x > W / 2 ? 1 : 0) + (ev.y > 212 ? 2 : 0);
         if (i >= 0 && i < n) { if (i === this.msel) this.pickMove(); else this.msel = i; }
       } else if (ev.k === 'ok') this.pickMove();
@@ -376,6 +428,7 @@ class BattleScreen {
   }
 
   pickMove() {
+    if (this.msel >= this.v.me.party[this.v.me.active].moves.length) { this.mode = 'menu'; return; }
     const mv = this.v.me.party[this.v.me.active].moves[this.msel];
     if (!mv || !mv.pp) { this.say(L('noPP'), 900); this.mode = 'queue'; return; }
     this.act(0, this.msel);

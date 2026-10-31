@@ -95,7 +95,7 @@ static Ext XT;
 static Rng RNG;
 static uint32_t NOW = 1793000000u;
 
-enum BKind : uint8_t { BK_NONE, BK_WILD, BK_LEGEND, BK_TRAINER, BK_GYM, BK_ELITE, BK_TOUR };
+enum BKind : uint8_t { BK_NONE, BK_WILD, BK_LEGEND, BK_TRAINER, BK_GYM, BK_ELITE, BK_TOUR, BK_RIVAL };
 static Battle BT;
 static uint8_t bKind = BK_NONE;
 static uint8_t bGym, bAce, bLast;
@@ -119,6 +119,46 @@ static Pend PQ[24];
 static uint8_t nPend;
 
 static OwnedMon &monAt(uint8_t inBox, uint8_t idx) { return inBox ? TR.box[idx] : TR.party[idx]; }
+
+// PC de 12 cajas de 20 (240, como en gen 1): las 3 primeras son el PC del motor
+// (TR.box, 60) y las otras 9 viven aqui. La lista completa es TR.box seguido de EXTRA.
+#define BOX_PAGE 20
+#define EXTRA_MAX 180
+struct Ext3 {
+  uint16_t count = 0;
+  OwnedMon mon[EXTRA_MAX];
+};
+static Ext3 EXTRA;
+
+static int boxTotal() { return TR.boxCount + EXTRA.count; }
+static OwnedMon *boxAt(int g) {
+  if (g < 0) return nullptr;
+  if (g < TR.boxCount) return &TR.box[g];
+  g -= TR.boxCount;
+  return g < EXTRA.count ? &EXTRA.mon[g] : nullptr;
+}
+static bool boxFull() { return TR.boxCount >= BOX_MAX && EXTRA.count >= EXTRA_MAX; }
+static bool teamLocked();
+
+// deja sitio en el PC del motor pasando los ultimos a las cajas extra (el orden se mantiene)
+static void spillBox() {
+  if (teamLocked() || TR.boxCount <= BOX_MAX - BOX_PAGE) return;
+  int k = TR.boxCount - (BOX_MAX - 2 * BOX_PAGE);
+  if (EXTRA.count + k > EXTRA_MAX) k = EXTRA_MAX - EXTRA.count;
+  if (k <= 0) return;
+  memmove(EXTRA.mon + k, EXTRA.mon, EXTRA.count * sizeof(OwnedMon));
+  for (int i = 0; i < k; i++) EXTRA.mon[i] = TR.box[TR.boxCount - k + i];
+  EXTRA.count += k;
+  TR.boxCount -= k;
+}
+
+// lo que se guarda aparte: el torneo en curso y lo pendiente de aprender o evolucionar
+struct Ext2 {
+  Tournament tour;
+  bool tourActive = false;
+  uint8_t nPend = 0;
+  Pend pq[24];
+};
 
 static void pushPend(uint8_t kind, uint8_t inBox, uint8_t idx, uint8_t a) {
   if (kind == PD_EVOLVE)  // una sola evolucion pendiente por Pokemon: la ultima
@@ -205,6 +245,7 @@ static void jencounter() {
     } else if (ENC.kind == EN_TRAINER) {
       const TrainerClass &c = TRAINER_CLASSES[ENC.trainer.cls];
       js("cls", gLang == LANG_ES ? c.es : c.en);
+      ji("clsId", ENC.trainer.cls);  // para el sprite del entrenador
       ji("prize", ENC.trainer.prize);
       jarr("party");
       for (int i = 0; i < ENC.trainer.count; i++) { jobj(); ji("sp", ENC.trainer.party[i].species); ji("lv", ENC.trainer.party[i].level); jend('}'); }
@@ -256,6 +297,7 @@ API void pt_new(int starter) {
   XT.lang = (uint8_t)gLang;
   XT.started = true;
   XT.lastDay = dayIndex(NOW);
+  EXTRA = Ext3();
   OwnedMon m;
   ownedInit(m, (uint8_t)starter, 5, RNG);
   m.flags |= OM_PARTNER;
@@ -282,6 +324,12 @@ API int pt_save() {
   n = exploreSave(EX, SAVEBUF + off + 4, sizeof(SAVEBUF) - off - 4); put32(SAVEBUF + off, (uint32_t)n); off += 4 + n;
   n = progressSave(PG, SAVEBUF + off + 4, sizeof(SAVEBUF) - off - 4); put32(SAVEBUF + off, (uint32_t)n); off += 4 + n;
   n = saveBlob("PTX1", 1, &XT, sizeof(XT), SAVEBUF + off + 4, sizeof(SAVEBUF) - off - 4); put32(SAVEBUF + off, (uint32_t)n); off += 4 + n;
+  // seccion extra (las partidas viejas no la tienen y siguen cargando)
+  Ext2 x2;
+  x2.tour = TOUR; x2.tourActive = tourActive; x2.nPend = nPend;
+  memcpy(x2.pq, PQ, sizeof(PQ));
+  n = saveBlob("PTX2", 1, &x2, sizeof(x2), SAVEBUF + off + 4, sizeof(SAVEBUF) - off - 4); put32(SAVEBUF + off, (uint32_t)n); off += 4 + n;
+  n = saveBlob("PTX3", 1, &EXTRA, sizeof(EXTRA), SAVEBUF + off + 4, sizeof(SAVEBUF) - off - 4); put32(SAVEBUF + off, (uint32_t)n); off += 4 + n;
   return (int)off;
 }
 
@@ -308,6 +356,15 @@ API int pt_load(int len) {
   bKind = BK_NONE;
   tourActive = false;
   nPend = 0;
+  Ext2 x2;
+  if ((q = next(n)) && loadBlob("PTX2", 1, &x2, sizeof(x2), q, n)) {
+    TOUR = x2.tour; tourActive = x2.tourActive;
+    nPend = x2.nPend <= sizeof(PQ) / sizeof(PQ[0]) ? x2.nPend : 0;
+    memcpy(PQ, x2.pq, sizeof(PQ));
+  }
+  EXTRA = Ext3();
+  static Ext3 x3;
+  if ((q = next(n)) && loadBlob("PTX3", 1, &x3, sizeof(x3), q, n) && x3.count <= EXTRA_MAX) EXTRA = x3;
   return 1;
 }
 
@@ -354,7 +411,7 @@ API void pt_tick(uint32_t now) {
   NOW = now;
   uint16_t day = dayIndex(now);
   if (XT.lastDay != day) { trustNewDay(TR); XT.lastDay = day; }
-  if (XT.healAt && now >= XT.healAt) { healAll(TR); XT.healAt = 0; }
+  if (XT.healAt && now >= XT.healAt && bKind == BK_NONE) { healAll(TR); XT.healAt = 0; }
   progressWeek(PG, now);
   if (encActive && ENC.expiresAt && now >= ENC.expiresAt && bKind == BK_NONE) encActive = false;
 }
@@ -396,7 +453,8 @@ API const char *pt_state() {
   ji("caught", dexCount(TR.caught));
   ji("dcDays", PG.dcDays);
   jb("dcPlayed", dailyPlayedToday(PG, NOW));
-  ji("boxCount", TR.boxCount);
+  ji("boxCount", boxTotal());
+  ji("boxMax", BOX_MAX + EXTRA_MAX);
   ji("pending", nPend);
   jb("encounter", encActive);
   jb("leagueOpen", leagueOpen());
@@ -437,6 +495,57 @@ API const char *pt_box() {
   for (int i = 0; i < TR.boxCount; i++) jowned(TR.box[i], false);
   jend(']');
   return jdone();
+}
+
+// caja `page` (0..11): 20 Pokemon de la lista completa del PC
+API const char *pt_box_page(int page) {
+  jreset();
+  jobj();
+  ji("page", page);
+  ji("pages", (BOX_MAX + EXTRA_MAX) / BOX_PAGE);
+  ji("total", boxTotal());
+  jarr("mons");
+  for (int i = 0; i < BOX_PAGE; i++) {
+    OwnedMon *m = boxAt(page * BOX_PAGE + i);
+    if (!m) break;
+    jowned(*m, false);
+  }
+  jend(']');
+  jend('}');
+  return jdone();
+}
+
+API const char *pt_box_mon(int g) {
+  jreset();
+  OwnedMon *m = boxAt(g);
+  if (!m) jraw("null"); else jowned(*m, true);
+  return jdone();
+}
+
+// sacar al equipo (g = posicion en la lista completa)
+API int pt_box_withdraw(int g) {
+  if (teamLocked() || TR.partyCount >= PARTY_MAX) return 0;
+  if (g < TR.boxCount) return withdrawFromBox(TR, (uint8_t)g);
+  int e = g - TR.boxCount;
+  if (e < 0 || e >= EXTRA.count) return 0;
+  TR.party[TR.partyCount++] = EXTRA.mon[e];
+  memmove(EXTRA.mon + e, EXTRA.mon + e + 1, (EXTRA.count - e - 1) * sizeof(OwnedMon));
+  EXTRA.count--;
+  return 1;
+}
+
+API int pt_box_release(int g) {
+  if (teamLocked()) return 0;
+  if (g < TR.boxCount) {
+    for (int i = g; i + 1 < TR.boxCount; i++) TR.box[i] = TR.box[i + 1];
+    TR.boxCount--;
+    return 1;
+  }
+  int e = g - TR.boxCount;
+  if (e < 0 || e >= EXTRA.count) return 0;
+  memmove(EXTRA.mon + e, EXTRA.mon + e + 1, (EXTRA.count - e - 1) * sizeof(OwnedMon));
+  EXTRA.count--;
+  return 1;
 }
 
 API const char *pt_mon(int inBox, int idx) {
@@ -587,6 +696,8 @@ API const char *pt_throw(int ball, int throwX10, int hit) {
   jreset();
   if (!encActive || (ENC.kind != EN_WILD && ENC.kind != EN_LEGEND) || bKind != BK_NONE) { jraw("{\"res\":\"none\"}"); return jdone(); }
   if (!ballOk(ball)) { jraw("{\"res\":\"noball\"}"); return jdone(); }
+  spillBox();
+  if (TR.partyCount >= PARTY_MAX && boxFull()) { jraw("{\"res\":\"boxfull\"}"); return jdone(); }
   TR.bag[ball]--;
   jobj();
   if (!hit) {
@@ -658,7 +769,8 @@ API const char *pt_battle_start(int kind, int arg) {
   battleInit(BT, RNG.next(), false);
   bBonus = { false, false, false, false };
   if (kind == 1) {
-    if (!encActive || !anyAlive(TR)) { jraw("{\"error\":1}"); return jdone(); }
+    if (!anyAlive(TR)) { jraw("{\"error\":\"fainted\"}"); return jdone(); }
+    if (!encActive) { jraw("{\"error\":\"gone\"}"); return jdone(); }
     buildPlayerSide();
     BattleSide &f = BT.side[1];
     if (ENC.kind == EN_TRAINER) {
@@ -675,7 +787,8 @@ API const char *pt_battle_start(int kind, int arg) {
       startCommon(ENC.kind == EN_LEGEND ? BK_LEGEND : BK_WILD);
     }
   } else if (kind == 2) {
-    if (!gymOpen((uint8_t)arg) || !anyAlive(TR)) { jraw("{\"error\":1}"); return jdone(); }
+    if (!anyAlive(TR)) { jraw("{\"error\":\"fainted\"}"); return jdone(); }
+    if (!gymOpen((uint8_t)arg)) { jraw("{\"error\":1}"); return jdone(); }
     buildPlayerSide();
     buildGymTeam(BT.side[1], (uint8_t)arg, BT.side[0], RNG);
     bGym = (uint8_t)arg;
@@ -686,12 +799,34 @@ API const char *pt_battle_start(int kind, int arg) {
     bBonus = { true, first, false, !first && TR.champion };
     startCommon(BK_GYM);
   } else if (kind == 3) {
-    if (!leagueOpen() || !anyAlive(TR)) { jraw("{\"error\":1}"); return jdone(); }
+    if (!anyAlive(TR)) { jraw("{\"error\":\"fainted\"}"); return jdone(); }
+    if (!leagueOpen()) { jraw("{\"error\":1}"); return jdone(); }
     if (!XT.leagueActive) { XT.leagueActive = true; XT.leagueIdx = 0; }
     buildPlayerSide();
     buildEliteTeam(BT.side[1], XT.leagueIdx, BT.side[0], RNG);
     bBonus = { true, !(PG.eliteBeaten & (1 << XT.leagueIdx)), false, false };
     startCommon(BK_ELITE);
+  } else if (kind == 5) {
+    // rival (Blue) en los momentos clave del viaje: arg = etapa 0..4. Su equipo crece
+    // de 2 a 6 y lleva el inicial que gana al tuyo, como en el original.
+    static const uint8_t SIZE[5] = { 2, 3, 4, 5, 6 };
+    static const int8_t PCT[5] = { -5, -6, -8, -10, -12 };  // afinar con sim/sim
+    static const uint8_t AI[5] = { 2, 3, 3, 4, 4 };
+    if (!anyAlive(TR)) { jraw("{\"error\":\"fainted\"}"); return jdone(); }
+    if (arg < 0 || arg > 4) { jraw("{\"error\":1}"); return jdone(); }
+    buildPlayerSide();
+    BattleSide full;
+    buildEliteTeam(full, ELITE_CHAMPION, BT.side[0], RNG, (int8_t)(PCT[arg] - CHAMPION_EXTRA_PCT));
+    BattleSide &f = BT.side[1];
+    f = full;
+    uint8_t n = SIZE[arg] < full.count ? SIZE[arg] : full.count;
+    for (int i = 0; i < n; i++) f.party[i] = full.party[full.count - n + i];  // los mas fuertes y el inicial
+    f.count = n;
+    f.aiTier = AI[arg];
+    f.potions = arg < 2 ? 1 : 2;
+    bPrize = prizeMoney(35, f.party[n - 1].level);
+    bBonus = { true, false, false, false };
+    startCommon(BK_RIVAL);
   } else if (kind == 4) {
     if (!tourActive || tourOver(TOUR)) { jraw("{\"error\":1}"); return jdone(); }
     bKind = BK_TOUR;  // ownedFor mira las inscripciones
@@ -711,7 +846,7 @@ static bool canThrow() { return bKind == BK_WILD || bKind == BK_LEGEND; }
 
 static void jview() {
   jobj();
-  static const char *KIND[] = { "none", "wild", "legend", "trainer", "gym", "elite", "tour" };
+  static const char *KIND[] = { "none", "wild", "legend", "trainer", "gym", "elite", "tour", "rival" };
   js("kind", KIND[bKind]);
   ji("turn", BT.turn);
   ji("outcome", bCaught ? 9 : BT.outcome);
@@ -721,6 +856,7 @@ static void jview() {
   ji("itemsLeft", tourBattle() ? (int)tourItemsAllowed(TOUR) - bItemsUsed : 99);
   if (bKind == BK_GYM) js("foeName", GYMS[bGym].leader);
   else if (bKind == BK_ELITE) js("foeName", ELITE[XT.leagueIdx].name);
+  else if (bKind == BK_RIVAL) js("foeName", ELITE[ELITE_CHAMPION].name);
   else if (bKind == BK_TRAINER) js("foeName", gLang == LANG_ES ? TRAINER_CLASSES[ENC.trainer.cls].es : TRAINER_CLASSES[ENC.trainer.cls].en);
   else if (bKind == BK_TOUR) {
     TourRival r = tourRival(TOUR);
@@ -728,6 +864,17 @@ static void jview() {
                   : (gLang == LANG_ES ? TRAINER_CLASSES[r.idx].es : TRAINER_CLASSES[r.idx].en));
   }
   if (canThrow()) jb("shiny", ENC.shiny);
+  // quien es el rival, para su sprite: clase de entrenador, lider o miembro de la Liga
+  if (bKind == BK_TRAINER) ji("tclass", ENC.trainer.cls);
+  else if (bKind == BK_GYM) ji("tgym", bGym);
+  else if (bKind == BK_ELITE) ji("telite", XT.leagueIdx);
+  else if (bKind == BK_RIVAL) ji("telite", ELITE_CHAMPION);
+  else if (bKind == BK_TOUR) {
+    TourRival r = tourRival(TOUR);
+    if (r.special == SPC_GYM) ji("tgym", r.idx);
+    else if (r.special != SPC_NONE) ji("telite", r.idx);
+    else ji("tclass", r.idx);
+  }
   jobj("me");
   ji("active", BT.side[0].active);
   jarr("party");
@@ -764,11 +911,21 @@ static void awardExp(uint8_t foeIdx) {
     xp = part ? xp / (n ? n : 1) : xp / 2;  // Repartir Exp.: la mitad a los que no pelearon
     if (!xp) xp = 1;
     uint16_t oldMax = ownedMaxHp(m);
+    BattleMon before;
+    monInit(before, m.species, m.level, m.genes, m.statExp);
     if (part) addStatExp(m, foe.species);
     LevelUp up = gainExp(m, xp);
     jobj(); js("k", "exp"); ji("i", i); js("n", dexName(m.species)); ji("v", xp); jend('}');
     if (!up.levels) continue;
-    jobj(); js("k", "lvl"); ji("i", i); js("n", dexName(m.species)); ji("lv", m.level); jend('}');
+    BattleMon after;
+    monInit(after, m.species, m.level, m.genes, m.statExp);
+    jobj(); js("k", "lvl"); ji("i", i); js("n", dexName(m.species)); ji("lv", m.level);
+    // stats nuevas y lo que subio cada una (ventana de subida de nivel)
+    const uint16_t nw[5] = { after.maxHp, after.atk, after.def, after.spe, after.spc };
+    const uint16_t od[5] = { before.maxHp, before.atk, before.def, before.spe, before.spc };
+    jarr("st"); for (int k = 0; k < 5; k++) jvi(nw[k]); jend(']');
+    jarr("dl"); for (int k = 0; k < 5; k++) jvi(nw[k] - od[k]); jend(']');
+    jend('}');
     uint8_t inBox, idx;
     ownedLoc((uint8_t)i, inBox, idx);
     for (int k = 0; k < up.newMoveCount; k++) pushPend(PD_LEARN, inBox, idx, up.newMoves[k]);
@@ -808,7 +965,12 @@ static void jevents(uint8_t from, uint8_t act0, uint8_t act1, uint16_t *hp0, uin
     js("n", dexName(m.species));
     ji("a", ev.a);
     ji("b", ev.b);
-    if (ev.kind == EV_MOVE || ev.kind == EV_CHARGE) { js("m", moveName(ev.a)); ji("t", MOVE_TBL[ev.a].type); }
+    if (ev.kind == EV_MOVE || ev.kind == EV_CHARGE) {
+      js("m", moveName(ev.a));
+      ji("t", MOVE_TBL[ev.a].type);
+      ji("p", MOVE_TBL[ev.a].power);      // para la animacion: golpe o movimiento de estado
+      ji("c", MOVE_TBL[ev.a].category);
+    }
     if (ev.kind == EV_EFFECT && ev.a >= 20 && ev.a < 0xF0) js("m", moveName(ev.a));
     if (ev.kind == EV_EFFECT && ev.a == AIL_DISABLE) js("m", moveName((uint8_t)ev.b));
     if (ev.kind == EV_DAMAGE && ev.a == 0) {
@@ -908,6 +1070,8 @@ API const char *pt_battle_act(int kind, int a, int b, int c) {
     me = { ACT_RUN, 0 };
   } else if (kind == 4) {
     if (!canThrow() || !ballOk(a)) { jend(']'); js("error", "ball"); jend('}'); return jdone(); }
+    spillBox();
+    if (TR.partyCount >= PARTY_MAX && boxFull()) { jend(']'); js("error", "boxfull"); jend('}'); return jdone(); }
     TR.bag[a]--;
     uint8_t shakes = 0;
     bool ok = c && catchAttempt(RNG, activeMon(BT, 1), (uint8_t)a, (uint8_t)b, &shakes);
@@ -961,9 +1125,9 @@ API const char *pt_battle_end() {
   } else if (bKind == BK_WILD || bKind == BK_LEGEND) {
     if (bKind == BK_LEGEND) exploreLegendResult(EX, ENC.legend, false, NOW);
     encActive = false;
-  } else if (bKind == BK_TRAINER) {
+  } else if (bKind == BK_TRAINER || bKind == BK_RIVAL) {
     if (won) money = cleanWinBonus(bPrize, noneFainted, partnerInParty(TR));
-    encActive = false;
+    if (bKind == BK_TRAINER) encActive = false;
   } else if (bKind == BK_GYM && won) {
     GymResult g = gymVictory(TR, bGym, bAce, bLast, noneFainted);
     jb("badge", g.newBadge);
@@ -993,7 +1157,7 @@ API const char *pt_battle_end() {
   if (money) { earn(TR, money); ji("money", money); }
   if (lost && bKind != BK_TOUR) {
     // fuera de combate: al Centro Pokemon; con salvajes y entrenadores se pierde el 10 %
-    if (bKind == BK_WILD || bKind == BK_LEGEND || bKind == BK_TRAINER) {
+    if (bKind == BK_WILD || bKind == BK_LEGEND || bKind == BK_TRAINER || bKind == BK_RIVAL) {
       uint32_t before = TR.money;
       blackout(TR);
       ji("lostMoney", before - TR.money);
@@ -1041,6 +1205,8 @@ API const char *pt_pending() {
   } else {
     ji("to", p.a);
     js("toName", dexName(p.a));
+    ji("hd", BSPECIES[m.species].heightDm);  // para dibujar las dos formas a su tamano
+    ji("toHd", BSPECIES[p.a].heightDm);
   }
   jend('}');
   return jdone();
@@ -1069,12 +1235,29 @@ API int pt_pending_resolve(int choice) {
 // ------------------------------------------------------- equipo y mochila ---
 
 API int pt_party_swap(int a, int b) {
-  if (bKind != BK_NONE || a < 0 || b < 0 || a >= TR.partyCount || b >= TR.partyCount) return 0;
+  if ((tourActive && !tourOver(TOUR)) || bKind != BK_NONE || a < 0 || b < 0 || a >= TR.partyCount || b >= TR.partyCount) return 0;
   OwnedMon x = TR.party[a]; TR.party[a] = TR.party[b]; TR.party[b] = x;
   return 1;
 }
-API int pt_deposit(int i) { return bKind == BK_NONE && depositToBox(TR, (uint8_t)i); }
-API int pt_withdraw(int i) { return bKind == BK_NONE && withdrawFromBox(TR, (uint8_t)i); }
+static bool teamLocked() { return bKind != BK_NONE || (tourActive && !tourOver(TOUR)); }
+API int pt_team_locked() { return teamLocked(); }
+API int pt_deposit(int i) { spillBox(); return !teamLocked() && depositToBox(TR, (uint8_t)i); }
+API int pt_withdraw(int i) { return !teamLocked() && withdrawFromBox(TR, (uint8_t)i); }
+
+// liberar un Pokemon del PC o del equipo (nunca al companero ni al ultimo del equipo)
+API int pt_release(int inBox, int idx) {
+  if (teamLocked()) return 0;
+  if (inBox) {
+    if (idx < 0 || idx >= TR.boxCount) return 0;
+    for (int i = idx; i + 1 < TR.boxCount; i++) TR.box[i] = TR.box[i + 1];
+    TR.boxCount--;
+    return 1;
+  }
+  if (idx < 0 || idx >= TR.partyCount || TR.partyCount <= 1 || (TR.party[idx].flags & OM_PARTNER)) return 0;
+  for (int i = idx; i + 1 < TR.partyCount; i++) TR.party[i] = TR.party[i + 1];
+  TR.partyCount--;
+  return 1;
+}
 
 // objeto fuera de combate; devuelve UseResult (USE_OK = 0) o 9 si no se puede
 API const char *pt_use_item(int item, int idx) {
@@ -1138,6 +1321,7 @@ API int pt_heal(int atHome) {
 
 API int pt_hatch(int i) {
   OwnedMon m;
+  spillBox();
   if (!eggHatch(EX, TR, RNG, (uint8_t)i, &m)) return 0;
   return m.species;
 }

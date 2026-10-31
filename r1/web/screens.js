@@ -69,6 +69,7 @@ class HomeScreen {
       { label: L('explore'), right: S.events + S.drops ? '!' : '', action: () => push(exploreScreen()) },
       { label: L('pokemon'), action: () => push(partyScreen('menu')) },
       { label: L('bag'), action: () => push(bagScreen()) },
+      { label: L('centerShort'), right: S.healAt ? '…' : '', action: () => pokemonCenter(() => this.build()) },
       { label: L('shop'), action: () => push(shopsScreen()) },
       { label: L('gyms'), action: () => push(gymsScreen()) },
       { label: L('tournaments'), right: S.dcPlayed ? '' : '!', action: () => push(tourScreen()) },
@@ -76,11 +77,11 @@ class HomeScreen {
       { label: L('settings'), action: () => push(settingsScreen()) },
     ];
     this.menu.sel = sel;
-    checkPending(() => {});
+    checkPending(() => checkRival());
   }
   draw(t) {
     menuBg();
-    header('PokéTrek', money(S.money));
+    header(profile.player, money(S.money));
     drawOverworld(19, t, S.night);
     const p = partner();
     if (p) {
@@ -105,7 +106,7 @@ class HomeScreen {
     const m = this.menu;
     roundBox(109, 134, 128, 145, BOX.light);
     m.items.forEach((it, i) => {
-      const y = 142 + i * 17;
+      const y = 141 + i * 15;
       if (i === m.sel) cursor(116, y, INK);
       textS(it.label.slice(0, 12), 126, y);
       if (it.right) textS(it.right, 230, y, '#c03028', 'right');
@@ -114,7 +115,7 @@ class HomeScreen {
   input(ev) {
     if (ev.k === 'back') return;
     if (ev.k === 'tap') {
-      const i = Math.floor((ev.y - 140) / 17);
+      const i = Math.floor((ev.y - 139) / 15);
       if (ev.x > 109 && i >= 0 && i < this.menu.items.length) { if (i === this.menu.sel) this.menu.choose(i); else this.menu.sel = i; }
       return;
     }
@@ -139,12 +140,8 @@ function exploreScreen() {
       { label: L('searchRoute'), right: '300 EE', action: () => push(routesScreen()) },
       { label: L('incense'), right: inc, action: () => S.incense ? message(L('incenseOn')) : push(routesScreen(true)) },
       { label: L('eggs'), right: S.eggs.filter(e => e.tier).length + '/3', action: () => push(eggsScreen()) },
-      { label: L('center'), right: healing ? L('healing') + ' ' + healing : '', action: () => {
-        const r = Engine.call('pt_heal', S.outside ? 0 : 1);
-        saveSoon();
-        message(r === 1 ? L('healHome') : L('healAway'), () => s.resume());
-      } },
-      { label: L('testSteps'), action: () => { walk(500); s.resume(); } },
+      { label: L('center'), right: healing, action: () => pokemonCenter(() => s.resume()) },
+      ...(prefs.testMode ? [{ label: L('testSteps'), action: () => { walk(500); s.resume(); } }] : []),
     ];
   };
   const s = new ListScreen(L('explore'), build(), {
@@ -156,6 +153,29 @@ function exploreScreen() {
     },
   });
   return s;
+}
+
+// Centro Pokemon (reglas): en casa cura al momento; fuera de casa, en 30 minutos.
+// El R1 no sabe si esta en el Wi-Fi de casa, asi que se le pregunta al jugador.
+function pokemonCenter(then) {
+  refresh();
+  if (S.leagueActive) { message(L('noCenterLeague'), then); return; }
+  const hurt = S.party.some(m => m.hp < m.max || m.st);
+  if (!hurt) { message(L('healNone'), then); return; }
+  const healNow = () => {
+    Engine.call('pt_set_outside', 0);
+    Engine.call('pt_heal', 1);
+    saveSoon();
+    message(L('healHome'), then);
+  };
+  if (!S.outside) { healNow(); return; }
+  const left = S.healAt ? fmtTime(S.healAt - nowSec()) : '';
+  const q = left ? L('healWaiting', left) : L('healAsk');
+  ask(q, [L('healHomeNow'), left ? L('back') : L('heal30'), ...(left ? [] : [L('back')])], k => {
+    if (k === 0) healNow();
+    else if (k === 1 && !left) { Engine.call('pt_heal', 0); saveSoon(); message(L('healAway'), then); }
+    else if (then) then();
+  });
 }
 
 function walk(n) {
@@ -191,7 +211,8 @@ function merchantScreen(loot) {
   const items = loot.offer.map((o, i) => ({ label: o.name, right: money(o.price), action: () => {
     const ok = Engine.call('pt_merchant_buy', i);
     saveSoon();
-    message(ok ? L('bought') : L('shopErr')[2]);
+    refresh();
+    message(ok ? L('bought') : S.money < o.price ? L('shopErr')[2] : L('shopErr')[5]);
   } }));
   items.push({ label: L('leave'), action: () => pop() });
   return new ListScreen(L('merchant'), items, { right: () => money(S.money) });
@@ -250,6 +271,7 @@ class EncounterScreen {
     this.e = e;
     this.t0 = performance.now();
     if (e.wild) spriteImage(e.wild.sp);  // que el sprite ya este cargado al aparecer
+    if (e.clsId !== undefined) trainerImage(TRAINER_KEYS[e.clsId]);
     (e.party || []).forEach(m => spriteImage(m.sp));
     const trainer = e.kind === 'trainer';
     const opts = trainer ? [L('battleIt'), L('decline')] : [L('throwBall'), L('battleIt'), L('run')];
@@ -258,12 +280,20 @@ class EncounterScreen {
   }
   draw(t) {
     const e = this.e;
+    if (e.expires && nowSec() >= e.expires && topScreen() === this && !this.gone) {
+      this.gone = true;
+      Engine.call('pt_leave_encounter');
+      replace(new MessageScreen(L('wildGone', e.wild.name)));
+    }
     drawBattleBg(encounterBg, t, S.night, 196);
     platform(120, 146, 64, 12, encounterBg, S.night);
     if (e.kind === 'trainer') {
-      e.party.forEach((m, i) => drawMon(m.sp, 'front', 60 + i * 60, 146, t, { scale: monScale(m.sp, m.hd || 10, 'front', 34) }));
+      const key = TRAINER_KEYS[e.clsId];
+      if (!drawTrainer(key, 120, 150)) e.party.forEach((m, i) => drawMon(m.sp, 'front', 60 + i * 60, 146, t, { scale: monScale(m.sp, m.hd || 10, 'front', 34) }));
       roundBox(30, 8, W - 60, 22, BOX.info);
       textS(e.cls, W / 2, 15, INK, 'center');
+      // sus Pokemon como Poke Balls, como en el juego
+      e.party.forEach((m, i) => { ctx.save(); ctx.translate(W - 20 - i * 16, 44); ctx.scale(0.6, 0.6); drawBall(0, 0, 0, 0); ctx.restore(); });
     } else {
       const w = e.wild;
       const intro = Math.min(1, (t - this.t0) / 500);
@@ -327,6 +357,7 @@ class EncounterScreen {
 
 function chooseBall(then) {
   refresh();
+  if (S.party.length >= 6 && S.boxCount >= 60) { message(L('pcFull')); return; }
   const balls = BALLS.map(id => S.bag.find(b => b.id === id)).filter(Boolean);
   if (!balls.length) { message(L('noBalls')); return; }
   if (balls.length === 1) { then(balls[0].id); return; }
@@ -334,153 +365,165 @@ function chooseBall(then) {
 }
 
 // ------------------------------------------------------------ lanzamiento --
-// Inclinar el R1 mueve la mira; girar la rueda hacia arriba rapido lanza.
-// El aro que se encoge da el bono: Nice x1,3, Great x1,6, Excellent x2.
+// Sencillo: el circulo se achica alrededor del Pokemon y se lanza tocando la
+// pantalla, girando la rueda o con el boton. La bola siempre llega; mientras mas
+// chico el circulo, mejor el bono (Nice x1,3, Great x1,6, Excellent x2).
+
+const BALL_HOME = { x: W / 2, y: 228 };
+const TARGET = { x: W / 2, y: 112 };
 
 class ThrowScreen {
   constructor(o) {
     this.o = o;
-    this.phase = 'aim';
+    this.phase = 'ready';
     this.t0 = performance.now();
-    this.aim = { x: W / 2, y: 120 };
-    input.wheelUps = [];
     this.label = '';
+    input.wheelUps = [];
+    spriteImage(o.sp);
   }
   ring(t) {
-    const p = ((t - this.t0) % 1500) / 1500;
-    return 36 - 28 * p;  // de 36 a 8 px
+    const p = ((t - this.t0) % 1400) / 1400;
+    return 40 - 30 * p;  // de 40 a 10 px
   }
-  target(t) { return { x: W / 2 + Math.sin(t / 700) * 34, y: 118 + Math.sin(t / 430) * 6 }; }
+  ringColor(r) {
+    const f = (r - 10) / 30;
+    return f < 0.2 ? '#f85838' : f < 0.45 ? '#f8a030' : f < 0.7 ? '#f8d030' : '#58d080';
+  }
   draw(t) {
-    drawBattleBg(encounterBg, t, S.night, 200);
-    platform(W / 2, 140, 64, 12, encounterBg, S.night);
-    const tg = this.phase === 'aim' ? this.target(t) : this.frozen;
-    const visible = this.phase === 'aim' || this.phase === 'fly' || (this.phase === 'result' && this.result && this.result.res !== 'caught');
-    if (visible) drawMon(this.o.sp, 'front', tg.x, tg.y + 22, t, { scale: monScale(this.o.sp, this.o.hd, 'front', 44) });
-    if (encounterBg === 'grass') tallGrass(134, t, S.night);
-    if (this.phase === 'aim') {
-      // aro de bono
+    const night = S.night;
+    drawBattleBg(encounterBg, t, night, 248);
+    platform(TARGET.x, TARGET.y + 24, 60, 11, encounterBg, night);
+    const scale = monScale(this.o.sp, this.o.hd, 'front', 52);
+    const ph = this.phase, dt = t - (this.phaseT || 0);
+
+    // el Pokemon: visible salvo dentro de la bola
+    let monAlpha = 1, monScaleK = 1, flash = 0;
+    if (ph === 'open') { monScaleK = Math.max(0, 1 - dt / 350); flash = 1; }
+    if (ph === 'drop' || ph === 'shake' || (ph === 'result' && this.result.res === 'caught')) monAlpha = 0;
+    if (ph === 'result' && this.result.res !== 'caught') { monScaleK = Math.min(1, dt / 300); flash = Math.max(0, 1 - dt / 400); }
+    if (monAlpha && monScaleK > 0.02) {
+      drawMon(this.o.sp, 'front', TARGET.x, TARGET.y + 24, t, { scale: scale * monScaleK, flash });
+    }
+    if (ph === 'ready') {
       const r = this.ring(t);
-      const f = (r - 8) / 28;
-      ctx.strokeStyle = f < 0.2 ? '#e8503a' : f < 0.45 ? '#f0a040' : f < 0.7 ? '#f8d030' : '#58b868';
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(tg.x, tg.y, r, 0, Math.PI * 2); ctx.stroke();
-      // mira
-      this.updateAim();
-      ctx.strokeStyle = theme.ink;
+      ctx.strokeStyle = this.ringColor(r);
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(TARGET.x, TARGET.y + 6, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.7)';
       ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.arc(this.aim.x, this.aim.y, 6, 0, Math.PI * 2); ctx.stroke();
-      rect(this.aim.x - 9, this.aim.y, 18, 1, theme.ink);
-      rect(this.aim.x, this.aim.y - 9, 1, 18, theme.ink);
-      this.checkFlick(t, tg, r);
+      ctx.beginPath(); ctx.arc(TARGET.x, TARGET.y + 6, 40, 0, Math.PI * 2); ctx.stroke();
+      // la bola espera abajo, moviendose un poco
+      drawBall(BALL_HOME.x, BALL_HOME.y + Math.sin(t / 250) * 2, this.o.ball, 0);
     }
-    if (this.phase === 'fly') {
-      const p = Math.min(1, (t - this.flyT) / 450);
-      const bx = W / 2 + (this.aim.x - W / 2) * p, by = 260 + (this.aim.y - 260) * p - Math.sin(p * Math.PI) * 60;
-      drawBall(bx, by, this.o.ball, p * 10);
-      if (p >= 1) this.land(t);
+    if (ph === 'fly') {
+      const p = Math.min(1, dt / 520);
+      const x = BALL_HOME.x + (TARGET.x - BALL_HOME.x) * p;
+      const y = BALL_HOME.y + (TARGET.y - BALL_HOME.y) * p - Math.sin(p * Math.PI) * 70;
+      drawBall(x, y, this.o.ball, p * 14);
+      if (p >= 1) this.setPhase('open', t);
     }
-    if (this.phase === 'shake') {
-      const k = Math.floor((t - this.shakeT) / 600);
-      const wob = k < this.result.shakes ? Math.sin((t - this.shakeT) / 60) * 4 : 0;
-      drawBall(this.frozen.x + wob, this.frozen.y + 18, this.o.ball, 0);
-      if (k > this.result.shakes) { this.phase = 'result'; this.resT = t; }
+    if (ph === 'open') {
+      drawBall(TARGET.x, TARGET.y, this.o.ball, 0, true);
+      ctx.fillStyle = `rgba(255,255,255,${Math.max(0, 0.9 - dt / 400)})`;
+      ctx.beginPath(); ctx.arc(TARGET.x, TARGET.y + 8, 10 + dt / 12, 0, Math.PI * 2); ctx.fill();
+      if (dt > 400) this.setPhase('drop', t);
     }
-    if (this.phase === 'result') {
-      if (this.result.res === 'caught') { drawBall(this.frozen.x, this.frozen.y + 18, this.o.ball, 0); text('★', this.frozen.x + 14, this.frozen.y, '#f0c020'); }
-      if (t - this.resT > 900) { this.phase = 'done'; this.o.done(this.result); }
+    if (ph === 'drop') {
+      const p = Math.min(1, dt / 300);
+      const y = TARGET.y + (TARGET.y + 20 - TARGET.y) * p - Math.sin(p * Math.PI) * 8;
+      drawBall(TARGET.x, y, this.o.ball, 0);
+      if (p >= 1) {
+        this.result = this.o.resolve(true, this.x10);
+        refresh();
+        if (this.result.res === 'noball' || this.result.res === 'none') { this.phase = 'done'; this.o.done(this.result); return; }
+        this.setPhase('shake', t);
+      }
     }
+    if (ph === 'shake') {
+      const k = Math.floor(dt / 650);
+      const local = dt % 650;
+      const wob = k < this.result.shakes && local < 400 ? Math.sin(local / 400 * Math.PI * 2) * 0.5 : 0;
+      drawBall(TARGET.x, TARGET.y + 20, this.o.ball, wob);
+      if (k >= Math.max(1, this.result.shakes) + (this.result.res === 'caught' ? 0 : 0)) this.setPhase('result', t);
+    }
+    if (ph === 'result') {
+      if (this.result.res === 'caught') {
+        drawBall(TARGET.x, TARGET.y + 20, this.o.ball, 0);
+        for (let i = 0; i < 3; i++) {
+          const a = -Math.PI / 2 + (i - 1) * 0.7, d = 10 + Math.min(14, dt / 30);
+          textS('★', TARGET.x + Math.cos(a) * d - 4, TARGET.y + 14 + Math.sin(a) * d, '#f8d030', 'left', '#806010');
+        }
+      }
+      if (dt > 1300) { this.phase = 'done'; this.o.done(this.result); }
+    }
+
     // panel
-    roundBox(0, 200, W, 82, BOX.dark);
-    roundBox(4, 206, W - 8, 72, BOX.light);
-    const msg = this.phase === 'aim' ? (input.tilt.ok ? L('aimHint') : L('aimHintDesk'))
-              : this.phase === 'result' || this.phase === 'done' ? this.resultText() : this.label;
-    wrap(msg, 26).slice(0, 4).forEach((l, i) => textS(l, 12, 214 + i * 12));
+    roundBox(0, 248, W, 34, BOX.dark);
+    const msg = ph === 'ready' ? L('throwHint') : ph === 'result' || ph === 'done' ? this.resultText()
+              : (this.label ? this.label + '! ' : '') + '. . .'.slice(0, 1 + Math.floor(t / 300) % 3 * 2);
+    wrap(msg, 27).slice(0, 2).forEach((l, i) => textS(l, 8, 254 + i * 12, '#f8f8f8', 'left', '#182030'));
     const b = S.bag.find(x => x.id === this.o.ball);
-    textS((b ? b.name : '') + ' ×' + (b ? b.n : 0), 12, 264, INK_DIM);
+    if (ph === 'ready') {
+      backButton();
+      roundBox(W - 56, 2, 54, 20, BOX.info);
+      ctx.save(); ctx.translate(W - 44, 12); ctx.scale(0.7, 0.7); drawBall(0, 0, this.o.ball, 0); ctx.restore();
+      textS('×' + (b ? b.n : 0), W - 8, 8, INK, 'right');
+    }
   }
+  setPhase(p, t) { this.phase = p; this.phaseT = t; }
   resultText() {
     const r = this.result || {};
     const name = spName(this.o.sp);
-    if (r.res === 'short') return L('short');
-    if (r.res === 'miss') return L('missed');
-    if (r.res === 'caught') return (this.label ? this.label + '! ' : '') + L('caught', name);
+    const pre = this.label ? this.label + '! ' : '';
+    if (r.res === 'caught') return pre + L('caught', name);
     if (r.res === 'fled') return L('fled', name);
-    if (r.res === 'broke') return (this.label ? this.label + '! ' : '') + L('brokeFree');
+    if (r.res === 'broke') return pre + L('brokeFree');
+    if (r.res === 'full') return L('boxFull');
     return '';
   }
-  updateAim() {
-    if (input.tilt.ok) {
-      const sx = prefs.invertX ? -1 : 1, sy = prefs.invertY ? -1 : 1;
-      const tx = W / 2 + input.tilt.x * 120 * sx, ty = 118 - input.tilt.y * 100 * sy;
-      this.aim.x += (tx - this.aim.x) * 0.25;
-      this.aim.y += (ty - this.aim.y) * 0.25;
-    } else if (input.mouse) {
-      this.aim.x = input.mouse.x;
-      this.aim.y = Math.min(190, input.mouse.y);
-    }
-    this.aim.x = Math.max(6, Math.min(W - 6, this.aim.x));
-    this.aim.y = Math.max(24, Math.min(194, this.aim.y));
-  }
-  // rafaga de la rueda hacia arriba: 3+ pasos en 350 ms lanza; 2 se queda corta
-  checkFlick(t, tg, r) {
-    const now = performance.now();
-    const ups = input.wheelUps.filter(x => now - x < 350);
-    if (!ups.length) { input.wheelUps = []; return; }
-    if (now - ups[ups.length - 1] < 160) return;  // la rafaga sigue
-    input.wheelUps = [];
-    if (ups.length >= 3) this.throwBall(t, tg, r, false);
-    else if (ups.length === 2) this.throwBall(t, tg, r, true);
-  }
-  throwBall(t, tg, r, short) {
-    this.frozen = { ...tg };
-    const f = (r - 8) / 28;
+  throwNow(t) {
+    if (this.phase !== 'ready') return;
+    const r = this.ring(t);
+    const f = (r - 10) / 30;
     this.x10 = f < 0.2 ? 20 : f < 0.45 ? 16 : f < 0.7 ? 13 : 10;
     this.label = this.x10 === 20 ? L('throwNames')[3] : this.x10 === 16 ? L('throwNames')[2] : this.x10 === 13 ? L('throwNames')[1] : '';
-    this.hit = !short && Math.hypot(this.aim.x - tg.x, this.aim.y - tg.y) <= 22;
-    if (short) { this.aim = { x: this.aim.x, y: 175 }; this.hit = false; }
-    this.short = short;
-    this.phase = 'fly';
-    this.flyT = t;
-  }
-  land(t) {
-    this.result = this.o.resolve(this.hit, this.x10);
-    refresh();  // bolas que quedan
-    if (this.short && this.result.res === 'miss') this.result.res = 'short';
-    if (this.result.res === 'noball' || this.result.res === 'none') { this.phase = 'done'; this.o.done(this.result); return; }
-    if (this.result.res === 'miss' || this.result.res === 'short') { this.phase = 'result'; this.resT = t; return; }
-    this.phase = 'shake';
-    this.shakeT = t;
+    this.setPhase('fly', t);
   }
   input(ev) {
-    if (this.phase !== 'aim') return;
-    if (ev.k === 'back') { pop(); return; }
-    if (ev.k === 'tap' && !input.tilt.ok) {
-      // en el PC o sin acelerometro: tocar lanza hacia donde se toca
-      this.aim = { x: ev.x, y: Math.min(194, ev.y) };
-      const t = performance.now();
-      this.throwBall(t, this.target(t), this.ring(t), false);
-    }
-    if (ev.k === 'ok' && !input.tilt.ok && ev.key === ' ') {
-      const t = performance.now();
-      this.throwBall(t, this.target(t), this.ring(t), false);
-    }
+    if (this.phase !== 'ready') return;
+    if (ev.k === 'back' || inBack(ev)) { pop(); return; }
+    // tocar, el boton o cualquier paso de rueda lanzan
+    if (ev.k === 'tap' || ev.k === 'ok' || ev.wheel) this.throwNow(performance.now());
   }
 }
 
-function drawBall(x, y, ball, spin) {
-  const colors = ['#e8503a', '#3a78d8', '#2a2a36', '#a040c0'];
+// Poke Ball de 9 px de radio; open = abierta (la mitad de arriba levantada)
+function drawBall(x, y, ball, spin, open) {
+  const colors = ['#e8503a', '#3a78d8', '#303040', '#a040c0'];
+  const R = 9;
   ctx.save();
   ctx.translate(Math.round(x), Math.round(y));
   ctx.rotate(spin);
-  ctx.fillStyle = colors[ball] || '#e8503a';
-  ctx.beginPath(); ctx.arc(0, 0, 6, Math.PI, 0); ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI); ctx.fill();
-  ctx.strokeStyle = '#2a2a36'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.stroke();
-  rect(-6, 0, 12, 1, '#2a2a36');
-  rect(-1, -1, 3, 3, '#fff');
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.ellipse(1, R + 2, R, 3, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#f8f8f8';
+  ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI); ctx.fill();
+  ctx.save();
+  if (open) { ctx.translate(0, -5); ctx.rotate(-0.5); }
+  ctx.fillStyle = colors[ball] || colors[0];
+  ctx.beginPath(); ctx.arc(0, 0, R, Math.PI, 0); ctx.fill();
+  if (ball === 2) { rect(-6, -6, 3, 4, '#f8d030'); rect(3, -6, 3, 4, '#f8d030'); }  // Ultra Ball
+  if (ball === 1) { rect(-6, -5, 3, 2, '#e8503a'); rect(3, -5, 3, 2, '#e8503a'); }  // Great Ball
+  ctx.restore();
+  ctx.strokeStyle = '#282830';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
+  rect(-R, -1, R * 2, 2, '#282830');
+  ctx.fillStyle = '#282830';
+  ctx.beginPath(); ctx.arc(0, 0, 3.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#f8f8f8';
+  ctx.beginPath(); ctx.arc(0, 0, 2, 0, Math.PI * 2); ctx.fill();
+  rect(-5, -6, 2, 2, 'rgba(255,255,255,0.8)');
   ctx.restore();
 }
 
@@ -511,37 +554,71 @@ function monMenu(i, m) {
       pop();
       if (m.partner) { message(L('partnerStays')); return; }
       if (S.party.length <= 1) { message(L('lastOne')); return; }
+      if (Engine.call('pt_team_locked')) { message(L('teamLocked')); return; }
+      if (S.boxCount >= 60) { message(L('pcFull')); return; }
       Engine.call('pt_deposit', i);
       saveSoon();
       topScreen().resume();
+    } },
+    { label: L('release'), action: () => {
+      pop();
+      if (m.partner) { message(L('partnerStays')); return; }
+      if (S.party.length <= 1) { message(L('lastOne')); return; }
+      releaseFlow(0, i, m.name);
     } },
     { label: L('pc') + ' (' + S.boxCount + ')', action: () => { pop(); push(boxScreen()); } },
   ];
   push(new ListScreen(m.name, items));
 }
 
-function boxScreen() {
+function releaseFlow(inBox, idx, name) {
+  ask(L('releaseQ', name), [L('no'), L('yes')], k => {
+    if (k !== 1) return;
+    if (Engine.call('pt_release', inBox, idx)) { saveSoon(); message(L('released', name), () => topScreen().resume && topScreen().resume()); }
+    else message(L('teamLocked'));
+  });
+}
+
+// PC de 12 cajas de 20, como en gen 1: se pasa de caja con las filas de arriba y abajo
+function boxScreen(startPage = 0) {
+  let page = startPage, pages = 12;
+  const s = new ListScreen('', [], { rowH: 24, refresh: () => build(), right: () => S.boxCount + '/' + (S.boxMax || 240) });
   const build = () => {
     refresh();
-    return Engine.json('pt_box').map((m, i) => ({
-      label: m.name + (m.shiny ? ' ✦' : ''), right: 'Lv' + m.lv, icon: m.sp, sub: `${m.hp}/${m.max}`,
-      action: () => {
-        ask(m.name, [L('withdraw'), L('summary'), L('back')], k => {
+    const d = Engine.json('pt_box_page', page);
+    pages = d.pages;
+    s.title = L('box') + ' ' + (page + 1) + '/' + pages;
+    const items = [{ label: '◀ ' + L('box') + ' ' + ((page + pages - 1) % pages + 1), action: () => { page = (page + pages - 1) % pages; s.sel = 0; s.resume(); } }];
+    d.mons.forEach((m, i) => {
+      const g = page * 20 + i;
+      items.push({
+        label: m.name + (m.shiny ? ' ✦' : ''), right: 'Lv' + m.lv, icon: m.sp, sub: `${m.hp}/${m.max}`,
+        action: () => ask(m.name, [L('withdraw'), L('summary'), L('release'), L('back')], k => {
           if (k === 0) {
             if (S.party.length >= 6) { message(L('partyFull')); return; }
-            Engine.call('pt_withdraw', i);
+            if (Engine.call('pt_team_locked')) { message(L('teamLocked')); return; }
+            Engine.call('pt_box_withdraw', g);
             saveSoon();
-            topScreen().resume();
-          } else if (k === 1) push(new SummaryScreen(1, i));
-        });
-      },
-    }));
+            s.resume();
+          } else if (k === 1) push(new SummaryScreen(2, g));
+          else if (k === 2) ask(L('releaseQ', m.name), [L('no'), L('yes')], r => {
+            if (r !== 1) return;
+            if (Engine.call('pt_box_release', g)) { saveSoon(); message(L('released', m.name), () => s.resume()); }
+            else message(L('teamLocked'));
+          });
+        }),
+      });
+    });
+    if (!d.mons.length) items.push({ label: L('emptyBox'), disabled: true });
+    items.push({ label: L('box') + ' ' + ((page + 1) % pages + 1) + ' ▶', action: () => { page = (page + 1) % pages; s.sel = 0; s.resume(); } });
+    return items;
   };
-  return new ListScreen(L('pc'), build(), { rowH: 26, refresh: build, right: () => S.boxCount + '/60' });
+  s.items = s.withBack(build());
+  return s;
 }
 
 class SummaryScreen {
-  constructor(inBox, idx) { this.m = Engine.json('pt_mon', inBox, idx); }
+  constructor(inBox, idx) { this.m = inBox === 2 ? Engine.json('pt_box_mon', idx) : Engine.json('pt_mon', inBox, idx); }
   draw(t) {
     const m = this.m;
     menuBg();
@@ -600,7 +677,7 @@ function pocketScreen(pocket, title, opts) {
   const build = () => {
     refresh();
     if (pocket === 'tm') {
-      return S.tms.map(tm => ({ label: (tm.num > 50 ? 'HM' + String(tm.num - 50).padStart(2, '0') : 'TM' + String(tm.num).padStart(2, '0')) + ' ' + tm.name,
+      return S.tms.map(tm => ({ label: (tm.num > 50 ? L('hm') + String(tm.num - 50).padStart(2, '0') : L('tm') + String(tm.num).padStart(2, '0')) + ' ' + tm.name,
         right: tm.num > 50 ? '' : '×' + tm.n, action: () => teachFlow(tm) }));
     }
     return S.bag.filter(b => b.pocket === pocket).map(b => ({ label: b.name, right: '×' + b.n, action: () => useFlow(b, opts) }));
@@ -672,7 +749,7 @@ function shopScreen(which, title) {
       } };
     });
     if (which === 1) {
-      for (const tm of d.tms) items.push({ label: 'TM' + String(tm.num).padStart(2, '0') + ' ' + tm.name, right: money(tm.price), action: () => {
+      for (const tm of d.tms) items.push({ label: L('tm') + String(tm.num).padStart(2, '0') + ' ' + tm.name, right: money(tm.price), action: () => {
         const r = Engine.call('pt_buy', 4, tm.slot, 1);
         saveSoon();
         message(r === 0 ? L('bought') : L('shopErr')[r]);
@@ -703,7 +780,7 @@ function gymsScreen() {
       label: L('league'), right: g.leagueActive ? (g.leagueIdx + 1) + '/5' : '', sub: g.leagueOpen ? (g.leagueActive ? L('leagueNext', g.elite[g.leagueIdx].name) : '') : L('leagueNeed'),
       disabled: !g.leagueOpen,
       action: () => {
-        const opts = g.leagueActive ? [L('leagueNext', g.elite[g.leagueIdx].name), L('pokemon'), L('bag'), L('leagueQuit')] : [L('challenge'), L('back')];
+        const opts = g.leagueActive ? [L('leagueNext', g.elite[g.leagueIdx].name), L('pokemon'), L('bag'), L('leagueQuit'), L('back')] : [L('challenge'), L('back')];
         ask(L('league'), opts, k => {
           if (k === 0) startBattle(3, 0, () => topScreen().resume());
           else if (g.leagueActive && k === 1) push(partyScreen('menu'));
@@ -750,7 +827,7 @@ function tourScreen() {
 function tierScreen(cup, name, d, feat) {
   const items = d.tiers.map((t, k) => {
     const fee = feat ? t.fee * 3 / 4 : t.fee;
-    return { label: t.name, right: money(fee), sub: `${t.champBp * (feat ? 2 : 1)} BP`, disabled: cup === 7 && k !== 3,
+    return { label: t.name, right: money(fee), sub: `${t.champBp * (feat ? 2 : 1)} BP`, disabled: cup === 7 && k !== 3, why: L('masterOnly'),
       action: () => pickTeam(name, picks => {
         const r = Engine.call('pt_tour_enter', cup, k, ...picks);
         saveSoon();
@@ -800,13 +877,18 @@ class TourRunScreen {
     }
     roundBox(70, 172, 100, 22, BOX.info);
     textS('Lv ' + d.oppLevel, W / 2, 179, INK, 'center');
-    roundBox(20, 228, W - 40, 32, BOX.light);
-    cursor(32, 240, INK);
-    textS(d.over ? L('continueTour') : L('battleIt'), W / 2 + 6, 240, INK, 'center');
+    const sel = this.sel || 0;
+    roundBox(20, 216, W - 40, 26, sel === 0 ? BOX.sel : BOX.light);
+    if (sel === 0) cursor(30, 225, INK);
+    textS(d.over ? L('continueTour') : L('battleIt'), W / 2 + 6, 225, INK, 'center');
+    roundBox(20, 246, W - 40, 26, sel === 1 ? BOX.sel : BOX.light);
+    if (sel === 1) cursor(30, 255, INK);
+    textS(L('back'), W / 2 + 6, 255, INK, 'center');
   }
   input(ev) {
-    if (ev.k === 'back') { pop(); return; }
-    if (ev.k === 'ok' || (ev.k === 'tap' && ev.y > 220)) {
+    if (ev.k === 'up' || ev.k === 'down') { this.sel = 1 - (this.sel || 0); return; }
+    if (ev.k === 'back' || (ev.k === 'tap' && ev.y > 244) || (ev.k === 'ok' && this.sel === 1)) { pop(); return; }
+    if (ev.k === 'ok' || (ev.k === 'tap' && ev.y > 212)) {
       if (this.d.over) finishTour();
       else startBattle(4, 0, () => { this.resume(); if (Engine.json('pt_tour_info').over) finishTour(); });
     }
@@ -844,11 +926,12 @@ function dexScreen() {
 function settingsScreen() {
   const build = () => [
     { label: L('language'), right: lang === LANG_ES ? 'Español' : 'English', action: () => { setLang(lang === LANG_ES ? LANG_EN : LANG_ES); saveSoon(); topScreen().resume(); } },
-    { label: L('invertAim') + ' X', right: prefs.invertX ? L('on') : L('off'), action: () => { prefs.invertX = !prefs.invertX; savePrefs(); topScreen().resume(); } },
-    { label: L('invertAim') + ' Y', right: prefs.invertY ? L('on') : L('off'), action: () => { prefs.invertY = !prefs.invertY; savePrefs(); topScreen().resume(); } },
+    { label: L('renamePlayer'), right: profile.player, action: () => push(new KeyboardScreen(L('yourName'), profile.player, n => { profile.player = n; saveProfile(); })) },
+    { label: L('renameRival'), right: profile.rival, action: () => push(new KeyboardScreen(L('rivalName'), profile.rival, n => { profile.rival = n; saveProfile(); })) },
+    { label: L('testMode'), right: prefs.testMode ? L('on') : L('off'), action: () => { prefs.testMode = !prefs.testMode; savePrefs(); topScreen().resume(); } },
     { label: L('credits'), action: () => message(L('creditsText')) },
     { label: L('resetGame'), action: () => ask(L('resetQ'), [L('no'), L('yes')], k => {
-      if (k === 1) { store.remove(SAVE_KEY).then(() => location.reload()); }
+      if (k === 1) { resetting = true; Promise.all([store.remove(SAVE_KEY), store.remove(PROFILE_KEY)]).then(() => location.reload()); }
     }) },
   ];
   const s = new ListScreen(L('settings'), build(), { refresh: build });
@@ -870,9 +953,9 @@ function checkPending(then) {
       if (ok) message(L('learned', p.name, p.move), next); else next();
     });
   } else if (p.kind === 'evolve') {
-    message(L('evolving', p.name), () => ask(L('evolveQ'), [L('yes'), L('no')], k => {
-      const ok = Engine.call('pt_pending_resolve', k === 0 ? 1 : 0);
-      message(ok ? L('evolved', p.name, p.toName) : L('stopped', p.name), next);
-    }));
+    // animacion de evolucion; volver la detiene
+    const ev = new EvolutionScreen(p, ok => { Engine.call('pt_pending_resolve', ok ? 1 : 0); saveSoon(); });
+    ev.then = next;
+    push(ev);
   } else then();
 }

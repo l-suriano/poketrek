@@ -1,6 +1,8 @@
 'use strict';
 // Arranque de PokeTrek en el Rabbit R1.
 
+let pendingReload = false;
+
 async function boot() {
   fit();
   rect(0, 0, W, H, '#101420');
@@ -8,11 +10,17 @@ async function boot() {
   push({ draw() { ctx.setTransform(scale, 0, 0, scale, 0, 0); rect(0, 0, W, H, '#101420'); text('PokéTrek', W / 2, 120, '#d8dcf0', 'center', 16); text('...', W / 2, 150, '#6a7090', 'center'); } });
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    // si llega una version nueva, se guarda la partida y se recarga sola
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hadController) pendingReload = true;  // se recarga en el inicio, nunca a mitad de un combate
+    });
+    navigator.serviceWorker.register('sw.js').then(r => r.update()).catch(() => {});
   }
   try { await document.fonts.load('8px PS2P'); } catch (e) { /* sigue con la fuente del sistema */ }
   try { SPR = await (await fetch('assets/sprites.json')).json(); } catch (e) { SPR = {}; }
   try { Object.assign(prefs, JSON.parse(await store.get(PREF_KEY) || '{}')); } catch (e) { /* por defecto */ }
+  await loadProfile();
 
   await Engine.load();
   Engine.call('pt_init', LANG_EN, nowSec(), (Math.random() * 0xFFFFFFFF) >>> 0);
@@ -27,7 +35,7 @@ async function boot() {
     push(new HomeScreen());
   } else {
     refresh();
-    push(langScreen(() => push(new StarterScreen())));
+    push(langScreen(() => push(new IntroScreen(() => push(new StarterScreen())))));
   }
 }
 
@@ -43,7 +51,9 @@ window.onSlowTick = () => {
   }
   const t = topScreen();
   // el incienso solo saca Pokemon en pantallas tranquilas (no en combate ni lanzando)
-  if (S.incense && (t instanceof HomeScreen || t instanceof ListScreen)) {
+  if (pendingReload && t instanceof HomeScreen) { saveNow(); location.reload(); return; }
+  // el incienso solo saca Pokemon en el inicio (no en dialogos, combates ni menus)
+  if (S.incense && t instanceof HomeScreen) {
     const e = Engine.json('pt_incense_tick');
     if (e.kind === 'wild') { saveSoon(); encounterBg = 'grass'; push(new EncounterScreen(e)); }
   }

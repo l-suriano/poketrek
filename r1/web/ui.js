@@ -7,7 +7,7 @@ const W = 240, H = 282;  // pantalla de una creation del R1
 // ------------------------------------------------------------------ motor ---
 
 // funciones del puente que devuelven texto (el resto devuelve numeros)
-const STR_FNS = new Set(['pt_state', 'pt_box', 'pt_mon', 'pt_dex', 'pt_species_name', 'pt_walk', 'pt_next_event',
+const STR_FNS = new Set(['pt_state', 'pt_box', 'pt_box_page', 'pt_box_mon', 'pt_mon', 'pt_dex', 'pt_species_name', 'pt_walk', 'pt_next_event',
   'pt_routes', 'pt_search', 'pt_encounter', 'pt_incense_tick', 'pt_throw', 'pt_battle_start', 'pt_battle_view',
   'pt_battle_act', 'pt_battle_end', 'pt_pending', 'pt_use_item', 'pt_shop', 'pt_gyms', 'pt_tour_info',
   'pt_tour_finish', 'pt_type_name', 'pt_save_b64']);
@@ -82,7 +82,9 @@ function saveSoon() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(saveNow, 800);
 }
+let resetting = false;
 function saveNow() {
+  if (resetting) return;
   if (!Engine.call('pt_started')) return;
   store.set(SAVE_KEY, Engine.call('pt_save_b64'));
 }
@@ -244,17 +246,28 @@ function drawMon(sp, side, x, y, t, opts = {}) {
   const body = (sprBody[sp] && sprBody[sp][side]) || { bottom: m.h - 1 };
   const dw = m.w * s, dh = m.h * s;
   const dx = Math.round(x - dw / 2), dy = Math.round(y - (body.bottom + 1) * s);
+  // el destello blanco se pinta en un lienzo aparte: sobre la pantalla pintaria
+  // un cuadrado encima del fondo
+  let src = img, sx = fi * m.w, sy = m.y;
+  if (opts.flash) {
+    flashCanvas.width = m.w; flashCanvas.height = m.h;
+    flashCtx.drawImage(img, sx, sy, m.w, m.h, 0, 0, m.w, m.h);
+    flashCtx.globalCompositeOperation = 'source-atop';
+    flashCtx.globalAlpha = opts.flash;
+    flashCtx.fillStyle = '#ffffff';
+    flashCtx.fillRect(0, 0, m.w, m.h);
+    flashCtx.globalCompositeOperation = 'source-over';
+    flashCtx.globalAlpha = 1;
+    src = flashCanvas; sx = 0; sy = 0;
+  }
   ctx.save();
   if (opts.alpha !== undefined) ctx.globalAlpha = opts.alpha;
-  if (opts.flip) { ctx.translate(dx + dw, dy); ctx.scale(-1, 1); ctx.drawImage(img, fi * m.w, m.y, m.w, m.h, 0, 0, dw, dh); }
-  else ctx.drawImage(img, fi * m.w, m.y, m.w, m.h, dx, dy, dw, dh);
-  if (opts.flash) {
-    ctx.globalCompositeOperation = 'source-atop';
-    ctx.globalAlpha = opts.flash;
-    rect(dx, dy, dw, dh, '#ffffff');
-  }
+  if (opts.flip) { ctx.translate(dx + dw, dy); ctx.scale(-1, 1); ctx.drawImage(src, sx, sy, m.w, m.h, 0, 0, dw, dh); }
+  else ctx.drawImage(src, sx, sy, m.w, m.h, dx, dy, dw, dh);
   ctx.restore();
 }
+const flashCanvas = document.createElement('canvas');
+const flashCtx = flashCanvas.getContext('2d');
 
 // mini icono (de frente, encajado en una caja de `box` px)
 function drawIcon(sp, x, y, box, t) {
@@ -278,9 +291,10 @@ function dispatch(ev) {
 }
 
 window.addEventListener('scrollUp', () => { input.wheelUps.push(performance.now()); dispatch({ k: 'up', wheel: true }); });
-window.addEventListener('scrollDown', () => dispatch({ k: 'down', wheel: true }));
-window.addEventListener('sideClick', () => dispatch({ k: 'ok' }));
-window.addEventListener('longPressStart', () => dispatch({ k: 'back' }));
+window.addEventListener('scrollDown', () => { input.wheelUps.push(performance.now()); dispatch({ k: 'down', wheel: true }); });
+window.addEventListener('sideClick', () => dispatch({ k: 'ok', side: true }));
+let longAt = 0;
+window.addEventListener('longPressStart', () => { longAt = performance.now(); dispatch({ k: 'back' }); });
 
 window.addEventListener('keydown', e => {
   const map = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Enter: 'ok', ' ': 'ok',
@@ -333,6 +347,25 @@ function pop() { const s = stack.pop(); if (s && s.leave) s.leave(); const t = t
 function replace(s) { stack.pop(); push(s); }
 function home() { while (stack.length > 1) stack.pop(); const t = topScreen(); if (t && t.resume) t.resume(); needDraw = true; }
 
+// boton ◀ arriba a la izquierda: en el R1 la presion larga la toma el sistema
+function backButton(x = 2, y = 2) {
+  rect(x, y, 18, 14, '#c03028');
+  rect(x + 1, y + 1, 16, 12, '#e85840');
+  ctx.fillStyle = '#f8f8f8';
+  for (let i = 0; i < 4; i++) ctx.fillRect(x + 6 + i, y + 7 - i, 1, 1 + i * 2);
+  ctx.fillRect(x + 10, y + 6, 3, 3);
+}
+function inBack(ev, x = 2, y = 2) { return ev.k === 'tap' && ev.x >= x - 8 && ev.x <= x + 28 && ev.y >= y - 8 && ev.y <= y + 24; }
+
+// corta un texto con "…" para que quepa en `w` pixeles
+function fitText(s, w) {
+  s = String(s);
+  setFont(8);
+  if (ctx.measureText(s).width <= w) return s;
+  while (s.length > 1 && ctx.measureText(s + '…').width > w) s = s.slice(0, -1);
+  return s + '…';
+}
+
 // fondo de los menus: rayas diagonales suaves, como las pantallas de los juegos
 function menuBg() {
   rect(0, 0, W, H, theme.bg);
@@ -343,11 +376,13 @@ function menuBg() {
 }
 
 // encabezado comun
-function header(title, right) {
+// back: dibuja el boton ◀ (tocar el encabezado vuelve atras)
+function header(title, right, back) {
   rect(0, 0, W, 18, '#304868');
   rect(0, 17, W, 1, '#6890c0');
   rect(0, 18, W, 1, '#182438');
-  textS(title, 6, 5, '#f8f8f8', 'left', '#182438');
+  if (back) { backButton(); textS(title, 24, 5, '#f8f8f8', 'left', '#182438'); }
+  else textS(title, 6, 5, '#f8f8f8', 'left', '#182438');
   if (right) textS(right, W - 6, 5, '#f8f8f8', 'right', '#182438');
 }
 
@@ -362,13 +397,19 @@ class ListScreen {
     this.opts = opts;
     this.rowH = opts.rowH || 22;
     this.top = 0;
+    this.items = this.withBack(items);
+  }
+  // las listas que se pueden cerrar llevan "◀ Volver" al final (rueda + boton)
+  withBack(items) {
+    if (this.opts.onBack || this.opts.noBack) return items;
+    return items.concat([{ label: '◀ ' + L('back'), isBack: true, action: () => pop() }]);
   }
   get y0() { return this.opts.y0 || 26; }
   get visible() { return Math.floor((H - this.y0 - (this.opts.footer ? 18 : 6)) / this.rowH); }
-  resume() { if (this.opts.refresh) { this.items = this.opts.refresh(); this.sel = Math.min(this.sel, Math.max(0, this.items.length - 1)); } }
+  resume() { if (this.opts.refresh) { this.items = this.withBack(this.opts.refresh()); this.sel = Math.min(this.sel, Math.max(0, this.items.length - 1)); } }
   draw(t) {
     menuBg();
-    header(this.title, typeof this.opts.right === 'function' ? this.opts.right() : this.opts.right);
+    header(this.title, typeof this.opts.right === 'function' ? this.opts.right() : this.opts.right, !this.opts.onBack);
     if (this.opts.drawTop) this.opts.drawTop(t);
     if (this.sel < this.top) this.top = this.sel;
     if (this.sel >= this.top + this.visible) this.top = this.sel - this.visible + 1;
@@ -384,10 +425,13 @@ class ListScreen {
       if (on) cursor(9, ty, '#c03028');
       let x = 18;
       if (it.icon) { drawIcon(it.icon, 15, y - 1, this.rowH, t); x = this.rowH + 17; }
-      const color = it.disabled ? INK_DIM : INK;
-      textS(it.label, x, ty, color);
-      if (it.right !== undefined && it.right !== '') textS(String(it.right), W - 11, ty, it.disabled ? INK_DIM : (it.rightColor || INK), 'right');
-      if (it.sub) text(it.sub, x, y + 13, INK_DIM);
+      const color = it.isBack ? INK_DIM : it.disabled ? INK_DIM : INK;
+      const right = it.right !== undefined && it.right !== '' ? String(it.right) : '';
+      setFont(8);
+      const rw = right ? ctx.measureText(right).width + 8 : 0;
+      textS(fitText(it.label, W - 11 - x - rw), x, ty, color);
+      if (right) textS(right, W - 11, ty, it.disabled ? INK_DIM : (it.rightColor || INK), 'right');
+      if (it.sub) text(fitText(it.sub, W - 11 - x - (it.hp !== undefined ? 60 : 0)), x, y + 13, INK_DIM);
       if (it.hp !== undefined) bar(W - 64, y + 15, 53, 3, it.hp);
     }
     if (this.items.length > this.visible) {
@@ -456,7 +500,7 @@ function message(lines, then) { push(new MessageScreen(lines, then)); }
 // pregunta con opciones: el texto abajo y las opciones en un recuadro a la derecha
 function ask(question, options, onPick) {
   const items = options.map((o, i) => ({ label: o, action: () => { pop(); onPick(i); } }));
-  const s = new ListScreen('', items, { rowH: 18 });
+  const s = new ListScreen('', items, { rowH: 18, noBack: true });
   s.draw = function (t) {
     const under = stack[stack.length - 2];
     if (under && under !== this) under.draw(t);

@@ -308,3 +308,56 @@ function battleWipe(t0, t) {
   }
   return true;
 }
+
+// ---------------------------------------------------- sprites de entrenadores
+// Sprites de FireRed/LeafGreen del repositorio de Pokemon Showdown
+// (r1/tools/fetch_assets.py). Mismo orden que TRAINER_CLASSES, GYMS y ELITE.
+const TRAINER_KEYS = ['youngster', 'bugcatcher', 'lass', 'hiker', 'fisherman', 'swimmerm', 'birdkeeper', 'supernerd',
+  'teamrocketgruntm', 'engineer', 'psychic', 'blackbelt', 'channeler', 'gentleman', 'beauty', 'acetrainer'];
+const GYM_KEYS = ['brock', 'misty', 'ltsurge', 'erika', 'koga', 'sabrina', 'blaine', 'giovanni'];
+const ELITE_KEYS = ['lorelei', 'bruno', 'agatha', 'lance', 'blue-champion'];
+const trainerImgs = {}, trainerFeet = {};
+
+function trainerImage(key) {
+  if (!key) return null;
+  if (!trainerImgs[key]) {
+    const img = new Image();
+    img.onload = () => {
+      // donde estan los pies (los sprites traen margen abajo)
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      const g = c.getContext('2d');
+      g.drawImage(img, 0, 0);
+      const d = g.getImageData(0, 0, img.width, img.height).data;
+      let bottom = img.height - 1;
+      outer: for (let y = img.height - 1; y >= 0; y--) for (let x = 0; x < img.width; x++) if (d[(y * img.width + x) * 4 + 3] > 40) { bottom = y; break outer; }
+      trainerFeet[key] = bottom;
+    };
+    img.src = `assets/trainers/${key}.png`;
+    trainerImgs[key] = img;
+  }
+  const img = trainerImgs[key];
+  return img.complete && img.naturalWidth ? img : null;
+}
+
+// entrenador con los pies en (x, y); devuelve false si su sprite no esta
+function drawTrainer(key, x, y, opts = {}) {
+  const img = trainerImage(key);
+  if (!img) return false;
+  const s = opts.scale || 1;
+  const feet = trainerFeet[key] !== undefined ? trainerFeet[key] : img.height - 1;
+  ctx.save();
+  if (opts.alpha !== undefined) ctx.globalAlpha = opts.alpha;
+  ctx.drawImage(img, Math.round(x - img.width * s / 2), Math.round(y - (feet + 1) * s), img.width * s, img.height * s);
+  ctx.restore();
+  return true;
+}
+
+// sprite del rival de un combate o encuentro (null si es salvaje)
+function trainerKeyFor(v) {
+  if (v.kind === 'rival') return 'blue';
+  if (v.tclass !== undefined) return TRAINER_KEYS[v.tclass];
+  if (v.tgym !== undefined) return GYM_KEYS[v.tgym];
+  if (v.telite !== undefined) return ELITE_KEYS[v.telite];
+  return null;
+}

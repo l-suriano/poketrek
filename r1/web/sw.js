@@ -1,8 +1,13 @@
 // Service worker: guarda todo el juego la primera vez para que el R1 lo abra
 // despues sin internet. Al cambiar VERSION se baja de nuevo.
-const VERSION = 'poketrek-r1-v2';
-const CORE = ['./', 'index.html', 'text.js', 'ui.js', 'gfx.js', 'screens.js', 'battle.js', 'game.js', 'poketrek.js',
+const VERSION = 'poketrek-r1-v8';
+const CORE = ['./', 'index.html', 'text.js', 'ui.js', 'gfx.js', 'fx.js', 'screens.js', 'battle.js', 'intro.js', 'game.js', 'poketrek.js',
   'manifest.json', 'assets/sprites.json', 'assets/PressStart2P-Regular.ttf'];
+
+const TRAINERS = ['youngster', 'bugcatcher', 'lass', 'hiker', 'fisherman', 'swimmerm', 'birdkeeper', 'supernerd',
+  'teamrocketgruntm', 'engineer', 'psychic', 'blackbelt', 'channeler', 'gentleman', 'beauty', 'acetrainer',
+  'brock', 'misty', 'ltsurge', 'erika', 'koga', 'sabrina', 'blaine', 'giovanni',
+  'lorelei', 'bruno', 'agatha', 'lance', 'blue', 'blue-champion', 'oak', 'red'];
 
 self.addEventListener('install', e => {
   e.waitUntil((async () => {
@@ -10,6 +15,7 @@ self.addEventListener('install', e => {
     await cache.addAll(CORE);
     const spr = await (await fetch('assets/sprites.json')).json();
     await cache.addAll(Object.keys(spr).map(sp => `assets/sprites/${sp}.png`));
+    await cache.addAll(TRAINERS.map(k => `assets/trainers/${k}.png`));
     self.skipWaiting();
   })());
 });

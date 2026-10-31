@@ -6,9 +6,12 @@
   (fila 7, el rival, mirando abajo a la izquierda). Un PNG por especie con
   todas las tiras una debajo de otra y sprites.json con sus medidas.
 - La fuente Press Start 2P (SIL OFL 1.1) de google/fonts.
+- Los sprites de entrenadores de FireRed/LeafGreen del repositorio de Pokemon
+  Showdown (sprites de los juegos; ver los creditos de la propia pagina).
 
   python3 r1/tools/fetch_assets.py          # los 151
   python3 r1/tools/fetch_assets.py 25 143   # algunas especies
+  python3 r1/tools/fetch_assets.py trainers  # solo entrenadores y fuente
 Necesita Pillow. Guarda lo bajado en r1/tools/cache/ para no repetirlo.
 """
 import io
@@ -26,6 +29,14 @@ CACHE = os.path.join(HERE, 'cache')
 BASE = 'https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite'
 FONT = 'https://raw.githubusercontent.com/google/fonts/main/ofl/pressstart2p/PressStart2P-Regular.ttf'
 FONT_LICENSE = 'https://raw.githubusercontent.com/google/fonts/main/ofl/pressstart2p/OFL.txt'
+TRAINER_BASE = 'https://play.pokemonshowdown.com/sprites/trainers'
+# clases de explore.cpp (TRAINER_CLASSES), lideres, Alto Mando, rival y profesor
+TRAINERS = [
+    'youngster', 'bugcatcher', 'lass', 'hiker', 'fisherman', 'swimmerm', 'birdkeeper', 'supernerd',
+    'teamrocketgruntm', 'engineer', 'psychic', 'blackbelt', 'channeler', 'gentleman', 'beauty', 'acetrainer',
+    'brock', 'misty', 'ltsurge', 'erika', 'koga', 'sabrina', 'blaine', 'giovanni',
+    'lorelei', 'bruno', 'agatha', 'lance', 'blue', 'oak', 'red',
+]
 ANIMS = ('Idle', 'Attack', 'Hurt')
 ROWS = {'back': 3, 'front': 7}
 
@@ -83,7 +94,9 @@ def species(dex):
 
 
 def main():
-    wanted = [int(a) for a in sys.argv[1:]] or list(range(1, 152))
+    wanted = [int(a) for a in sys.argv[1:] if a.isdigit()]
+    if not sys.argv[1:]:
+        wanted = list(range(1, 152))
     manifest_path = os.path.join(OUT, 'sprites.json')
     manifest = json.load(open(manifest_path)) if os.path.exists(manifest_path) else {}
     for dex in wanted:
@@ -94,6 +107,13 @@ def main():
             print(dex, 'ERROR', e)
     os.makedirs(OUT, exist_ok=True)
     json.dump(manifest, open(manifest_path, 'w'), separators=(',', ':'), sort_keys=True)
+    os.makedirs(os.path.join(OUT, 'trainers'), exist_ok=True)
+    for name in TRAINERS + ['blue-champion']:
+        src = 'blue-gen3champion' if name == 'blue-champion' else name + '-gen3'
+        try:
+            open(os.path.join(OUT, 'trainers', name + '.png'), 'wb').write(get(f'{TRAINER_BASE}/{src}.png'))
+        except Exception as e:
+            print('entrenador', name, 'ERROR', e)
     open(os.path.join(OUT, 'PressStart2P-Regular.ttf'), 'wb').write(get(FONT))
     open(os.path.join(OUT, 'OFL.txt'), 'wb').write(get(FONT_LICENSE))
     print(len(manifest), 'especies en sprites.json')
