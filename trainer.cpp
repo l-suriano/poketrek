@@ -422,9 +422,7 @@ uint8_t dexCount(const uint8_t *bits) {
 
 // ---------------------------------------------------------------- guardado -
 
-static const uint8_t SAVE_MAGIC[4] = { 'P', 'T', 'K', '1' };
 #define SAVE_VERSION 1
-#define SAVE_HEADER 16  // magic 4 + version 2 + reservado 2 + tamano 4 + crc 4
 
 static uint32_t crc32(const uint8_t *p, size_t n) {
   uint32_t c = 0xFFFFFFFFu;
@@ -438,24 +436,34 @@ static uint32_t crc32(const uint8_t *p, size_t n) {
 static void put32(uint8_t *p, uint32_t v) { for (int i = 0; i < 4; i++) p[i] = (uint8_t)(v >> (8 * i)); }
 static uint32_t get32(const uint8_t *p) { return p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24; }
 
+size_t saveBlob(const char magic[4], uint16_t version, const void *data, size_t size,
+                uint8_t *buf, size_t cap) {
+  if (cap < SAVE_HEADER + size) return 0;
+  memcpy(buf, magic, 4);
+  buf[4] = version & 0xFF; buf[5] = version >> 8;
+  buf[6] = buf[7] = 0;
+  put32(buf + 8, (uint32_t)size);
+  memcpy(buf + SAVE_HEADER, data, size);
+  put32(buf + 12, crc32(buf + SAVE_HEADER, size));
+  return SAVE_HEADER + size;
+}
+
+bool loadBlob(const char magic[4], uint16_t version, void *data, size_t size,
+              const uint8_t *buf, size_t len) {
+  if (len < SAVE_HEADER || memcmp(buf, magic, 4) != 0) return false;
+  if ((buf[4] | buf[5] << 8) != version) return false;
+  if (get32(buf + 8) != size || len < SAVE_HEADER + size) return false;
+  if (crc32(buf + SAVE_HEADER, size) != get32(buf + 12)) return false;
+  memcpy(data, buf + SAVE_HEADER, size);
+  return true;
+}
+
 size_t trainerSaveSize() { return SAVE_HEADER + sizeof(Trainer); }
 
 size_t trainerSave(const Trainer &t, uint8_t *buf, size_t cap) {
-  if (cap < trainerSaveSize()) return 0;
-  memcpy(buf, SAVE_MAGIC, 4);
-  buf[4] = SAVE_VERSION & 0xFF; buf[5] = SAVE_VERSION >> 8;
-  buf[6] = buf[7] = 0;
-  put32(buf + 8, (uint32_t)sizeof(Trainer));
-  memcpy(buf + SAVE_HEADER, &t, sizeof(Trainer));
-  put32(buf + 12, crc32(buf + SAVE_HEADER, sizeof(Trainer)));
-  return trainerSaveSize();
+  return saveBlob("PTK1", SAVE_VERSION, &t, sizeof(Trainer), buf, cap);
 }
 
 bool trainerLoad(Trainer &t, const uint8_t *buf, size_t len) {
-  if (len < SAVE_HEADER || memcmp(buf, SAVE_MAGIC, 4) != 0) return false;
-  if ((buf[4] | buf[5] << 8) != SAVE_VERSION) return false;
-  if (get32(buf + 8) != sizeof(Trainer) || len < trainerSaveSize()) return false;
-  if (crc32(buf + SAVE_HEADER, sizeof(Trainer)) != get32(buf + 12)) return false;
-  memcpy(&t, buf + SAVE_HEADER, sizeof(Trainer));
-  return true;
+  return loadBlob("PTK1", SAVE_VERSION, &t, sizeof(Trainer), buf, len);
 }

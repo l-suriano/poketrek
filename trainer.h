@@ -137,6 +137,11 @@ bool dexHas(const uint8_t *bits, uint8_t species);
 uint8_t dexCount(const uint8_t *bits);
 
 // ---- guardado (cabecera + CRC32; el struct va tal cual) ----
+#define SAVE_HEADER 16  // magic 4 + version 2 + reservado 2 + tamano 4 + crc 4
+size_t saveBlob(const char magic[4], uint16_t version, const void *data, size_t size,
+                uint8_t *buf, size_t cap);
+bool loadBlob(const char magic[4], uint16_t version, void *data, size_t size,
+              const uint8_t *buf, size_t len);
 size_t trainerSaveSize();
 size_t trainerSave(const Trainer &t, uint8_t *buf, size_t cap);
 bool trainerLoad(Trainer &t, const uint8_t *buf, size_t len);
