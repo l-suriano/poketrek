@@ -38,6 +38,7 @@ const Cloud = {
       savePrefs();
       return true;
     } catch (e) {
+      if (!this.failed) Tele.track('cloud', 'fail', { err: e.message });
       this.failed = true;  // sin red: se intenta en el siguiente guardado
       return false;
     }
@@ -62,6 +63,7 @@ function cloudScreen() {
           if (!prefs.cloudCode) prefs.cloudCode = Cloud.newCode();
           prefs.cloudOff = false;
           savePrefs();
+          Tele.track('cloud', 'on');
           Cloud.upload(true).then(ok => message([L('cloudCodeIs', Cloud.pretty(prefs.cloudCode)), L(ok ? 'cloudWriteDown' : 'cloudLater')],
             () => topScreen().resume && topScreen().resume()));
         }) },
@@ -74,7 +76,7 @@ function cloudScreen() {
       { label: L('cloudNow'), action: () => Cloud.upload(true).then(ok => message(L(ok ? 'cloudDone' : 'cloudLater'), () => topScreen().resume && topScreen().resume())) },
       { label: L('cloudRestore'), action: () => restoreFlow() },
       { label: L('cloudTurnOff'), action: () => ask(L('cloudOffQ'), [L('no'), L('yes')], k => {
-        if (k === 1) { prefs.cloudOff = true; savePrefs(); topScreen().resume(); }
+        if (k === 1) { prefs.cloudOff = true; savePrefs(); Tele.track('cloud', 'off'); topScreen().resume(); }
       }) },
     ];
   };
@@ -96,12 +98,15 @@ function restoreFlow() {
         try { Object.assign(profile, JSON.parse(d.profile || '{}')); } catch (e) { /* nombres por defecto */ }
         prefs.cloudCode = code;
         prefs.cloudOff = false;
+        Tele.track('cloud', 'restore');
+        Tele.flush(true);
         resetting = true;  // nada mas escribe la partida mientras se reinicia
         Promise.all([store.set(SAVE_KEY, d.save), store.set(PROFILE_KEY, JSON.stringify(profile)), store.set(PREF_KEY, JSON.stringify(prefs))])
           .then(() => location.reload());
       });
     }).catch(e => {
       if (topScreen() === waiting) pop();
+      Tele.track('cloud', 'restoreFail', { err: e.message });
       message(L(e.message === 'none' ? 'cloudNone' : 'cloudNoNet'));
     });
   }, { max: 10, keys: CLOUD_CHARS, group: 5 }));

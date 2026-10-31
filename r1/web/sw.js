@@ -1,6 +1,6 @@
 // Service worker: guarda todo el juego la primera vez para que el R1 lo abra
 // despues sin internet. Al cambiar VERSION se baja de nuevo.
-const VERSION = 'poketrek-r1-v18';
+const VERSION = 'poketrek-r1-v19';
 const CORE = ['./', 'index.html', 'text.js', 'ui.js', 'telemetry.js', 'cloud.js', 'gfx.js', 'fx.js', 'screens.js', 'cards.js', 'battle.js', 'intro.js', 'kanto.js', 'world.js', 'game.js', 'poketrek.js',
   'manifest.json', 'assets/sprites.json', 'assets/PressStart2P-Regular.ttf'];
 

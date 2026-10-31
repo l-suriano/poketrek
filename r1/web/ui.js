@@ -12,10 +12,24 @@ const STR_FNS = new Set(['pt_state', 'pt_species', 'pt_box', 'pt_box_page', 'pt_
   'pt_battle_act', 'pt_battle_end', 'pt_pending', 'pt_use_item', 'pt_shop', 'pt_gyms', 'pt_tour_info',
   'pt_tour_finish', 'pt_type_name', 'pt_save_b64', 'pt_challenges']);
 
+// acciones del jugador que se registran (argumentos y resultado son numeros: nada personal)
+const ACT_FNS = new Set(['pt_buy', 'pt_use_item', 'pt_teach', 'pt_pending_resolve', 'pt_heal', 'pt_set_outside', 'pt_hatch',
+  'pt_release', 'pt_box_release', 'pt_merchant_buy', 'pt_incense_start', 'pt_deposit', 'pt_withdraw', 'pt_box_withdraw',
+  'pt_party_swap', 'pt_tour_enter', 'pt_daily_enter', 'pt_league_quit', 'pt_leave_encounter', 'pt_search', 'pt_battle_start']);
+
 const Engine = {
   mod: null,
   dev: false,
   call(fn, ...args) {
+    const r = this.raw(fn, ...args);
+    if (ACT_FNS.has(fn) && typeof Tele !== 'undefined') {
+      let res = r;
+      if (typeof r === 'string') { try { const j = JSON.parse(r); res = j.error || j.res || j.kind || 'ok'; } catch (e) { res = '?'; } }
+      Tele.track('act', fn.slice(3), { a: args.filter(a => typeof a === 'number'), r: res });
+    }
+    return r;
+  },
+  raw(fn, ...args) {
     const str = STR_FNS.has(fn);
     if (this.mod) {
       return this.mod.ccall(fn, str ? 'string' : 'number', args.map(a => typeof a === 'string' ? 'string' : 'number'), args);

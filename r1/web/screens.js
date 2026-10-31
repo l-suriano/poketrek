@@ -829,6 +829,7 @@ function settingsScreen() {
     { label: L('cloud'), right: prefs.cloudCode && !prefs.cloudOff ? L('on') : L('off'), action: () => push(cloudScreen()) },
     { label: L('telemetry'), right: prefs.telemetry !== false ? L('on') : L('off'), action: () => { prefs.telemetry = prefs.telemetry === false; savePrefs(); topScreen().resume(); } },
     { label: L('errorLog'), right: errLog.length || '', action: () => push(errorLogScreen()) },
+    { label: L('deviceId'), right: Tele.device, action: () => message([L('deviceId'), Tele.device, L('deviceIdNote')]) },
     { label: L('credits'), action: () => message(L('creditsText')) },
     { label: L('resetGame'), action: () => ask(L('resetQ'), [L('no'), L('yes')], k => {
       if (k === 1) { resetting = true; Promise.all([store.remove(SAVE_KEY), store.remove(PROFILE_KEY)]).then(() => location.reload()); }

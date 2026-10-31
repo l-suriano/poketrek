@@ -220,7 +220,11 @@ class BattleScreen {
     if (v.outcome === 9) this.say(L('caught', v.foe.mon.name), 1300);
     const r = Engine.json('pt_battle_end');
     saveSoon();
-    Tele.track('battle', v.kind, { out: v.outcome, turns: v.turn, foe: v.foe.mon.sp, lv: v.foe.mon.lv, me: this.disp[0].sp });
+    Tele.track('battle', v.kind, {
+      out: v.outcome, turns: v.turn, foe: v.foe.mon.sp, lv: v.foe.mon.lv, n: v.foe.count, me: this.disp[0].sp,
+      party: v.me.party.map(m => m.sp + ':' + m.lv), route: v.route, boss: v.boss, cleared: r.routeCleared, badge: r.badge,
+      money: r.money, lost: r.lostMoney, blackout: r.blackout, gym: v.tgym, elite: v.telite, cls: v.tclass,
+    });
     if (r.money) this.say(L('gotMoney', r.money.toLocaleString('en-US')), 1100);
     if (r.badge) this.say(L('gotBadge', this.foeName), 1400);
     for (const tm of r.tms || []) this.say(L('gotTM', String(tm).padStart(2, '0')), 1100);

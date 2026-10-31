@@ -35,6 +35,7 @@ async function boot() {
     lang = JSON.parse(Engine.call('pt_state')).lang === LANG_ES ? LANG_ES : LANG_EN;
     refresh();
     push(new HomeScreen());
+    teleState('boot');
     telemetryNotice();
   } else {
     refresh();
@@ -50,6 +51,7 @@ window.onSlowTick = () => {
     const n = steps.pending;
     steps.pending = 0;
     Engine.json('pt_walk', n, S.outside ? 1 : 0);
+    TeleWalk.add(n, S.outside);
     saveSoon();
   }
   const t = topScreen();
@@ -64,6 +66,9 @@ window.onSlowTick = () => {
   if (t && t.resume && t instanceof HomeScreen) t.resume();
 };
 
-document.addEventListener('visibilitychange', () => { if (document.hidden) { saveNow(); Cloud.upload(); } });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { saveNow(); Cloud.upload(); TeleWalk.end(); Tele.flush(true); }
+  else TeleWalk.start();
+});
 
 boot();

@@ -62,7 +62,9 @@ base D1 de la telemetria.
 
 ## Telemetria anonima
 
-El juego manda errores y datos de uso (pantallas, combates, capturas) a
+El juego manda errores y datos de uso (pantallas, combates, capturas,
+acciones como compras o MTs, pasos, visitas y una foto del progreso al abrir
+y al salir) a
 `/api/t` (`r1/functions/api/t.js`), que los guarda en la base D1
 `ptk-telemetry` (`r1/schema.sql`). No van nombres ni datos personales: solo
 un identificador al azar del aparato. No hay forma publica de leerlos; se

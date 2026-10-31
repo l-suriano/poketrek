@@ -132,6 +132,8 @@ const TXT = {
   cloudNone: ['No hay respaldo con ese código.', 'No backup with that code.'],
   cloudNoNet: ['No hay conexión. Prueba otra vez con internet.', 'No connection. Try again with internet.'],
   cloudBad: ['El respaldo está dañado y no se puede cargar.', 'The backup is damaged and cannot be loaded.'],
+  deviceId: ['ID anónimo', 'Anonymous ID'],
+  deviceIdNote: ['Así aparece este R1 en los datos anónimos. No dice quién eres.', 'This is how this R1 shows up in the anonymous data. It does not say who you are.'],
   telemetry: ['Enviar datos anónimos', 'Send anonymous data'],
   teleNotice: ['Para mejorar el juego se envían errores y datos de uso de forma anónima (sin nombres ni datos personales). Puedes apagarlo en Ajustes.', 'To improve the game, errors and usage data are sent anonymously (no names or personal data). You can turn it off in Settings.'],
   notSeen: ['Todavía no lo has visto.', 'You haven\'t seen it yet.'],
